@@ -32,15 +32,13 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          $url = "https://jrsoftware.org/download.php/is.exe"
-          $installer = "$env:RUNNER_TEMP\innosetup-installer.exe"
-          Invoke-WebRequest -Uri $url -OutFile $installer
-          Start-Process -FilePath $installer -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -Wait
+          # jrsoftware download.php often returns HTML on runners; use Chocolatey.
+          choco install innosetup -y --no-progress
           $iscc = @(
             "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $iscc) { throw "ISCC.exe not found after Inno Setup install" }
+          if (-not $iscc) { throw "ISCC.exe not found after Chocolatey install" }
           echo "ISCC=$iscc" >> $env:GITHUB_ENV
 
       - name: Build installer (Inno Setup)
