@@ -1,0 +1,76 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r windows/requirements-build.txt
+
+      - name: Build portable (PyInstaller)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File windows/build_portable.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          $installer = "$env:RUNNER_TEMP\innosetup-installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -Wait
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after Inno Setup install" }
+          echo "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File windows/build_installer.ps1
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: grokbot2api-windows-x64
+          path: |
+            windows/dist/grokbot2api-windows-portable-x64.zip
+            windows/dist/grokbot2api-windows-setup-x64.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            windows/dist/grokbot2api-windows-portable-x64.zip
+            windows/dist/grokbot2api-windows-setup-x64.exe
+          generate_release_notes: true
+          body: |
+            ## Windows client
+
+            - **Portable** (`grokbot2api-windows-portable-x64.zip`): unzip and run `grokbot2api.exe` — no installer required.
+            - **Installer** (`grokbot2api-windows-setup-x64.exe`): Program Files install, optional Start Menu / desktop shortcuts, uninstaller, optional launch after install.
+
+            The client wraps the **local** grokbot2api gateway (default `127.0.0.1:8765`). Store your `SAND_INFERENCE_RENEWAL_CREDENTIAL` via **Set Credential** in the tray / control window (DPAPI). Open **Open Admin** for the workbench at `/admin`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

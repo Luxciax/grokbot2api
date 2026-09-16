@@ -1,0 +1,31 @@
+# Local Cursor-sand proxy. Does NOT pool accounts — one renewal credential per container.
+services:
+  grokbot2api:
+    build: .
+    image: grokbot2api:local
+    ports:
+      - "8765:8765"
+    environment:
+      # Required for non-loopback bind. Set in .env or export before `compose up`.
+      GROK_BUILD_PROXY_API_KEY: ${GROK_BUILD_PROXY_API_KEY:?set GROK_BUILD_PROXY_API_KEY}
+      SAND_INFERENCE_RENEWAL_CREDENTIAL: ${SAND_INFERENCE_RENEWAL_CREDENTIAL:?set SAND_INFERENCE_RENEWAL_CREDENTIAL}
+      # Optional CORS (comma-separated). Example: http://localhost:3000
+      # CORS_ORIGINS: "*"
+    volumes:
+      - grokbot2api-data:/data
+    # Uncomment to pass CORS through the CLI:
+    # command:
+    #   - --listen
+    #   - "0.0.0.0"
+    #   - --port
+    #   - "8765"
+    #   - --admin-config
+    #   - /data/admin_config.json
+    #   - --api-key-env
+    #   - GROK_BUILD_PROXY_API_KEY
+    #   - --cors-origins
+    #   - ${CORS_ORIGINS:-}
+    restart: unless-stopped
+
+volumes:
+  grokbot2api-data:

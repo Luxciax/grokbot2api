@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile
+        run: |
+          python3 -m py_compile grokbot2api.py responses_api.py messages_api.py api_common.py model_catalogue.py sand_inference.py image_gen.py
+          python3 -m py_compile windows/app.py windows/main.py windows/credentials.py windows/gateway_service.py windows/tray_ui.py
+      - name: Test
+        run: python3 -m unittest discover -s tests -v

@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*token*.json
+*credential*
+cursor-runtime-pack*
+host-main.cjs
+.idea/
+.vscode/
+admin_config.json
+
+# Generated image artifacts from /v1/images/generations
+media/*
+!media/.gitkeep
+
+# Keep Windows client credential module (pattern *credential* would ignore it)
+!windows/credentials.py
+
+# Windows / PyInstaller build outputs
+windows/build/
+windows/dist/
+windows/*.spec.bak
