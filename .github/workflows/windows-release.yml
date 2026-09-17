@@ -55,7 +55,7 @@ jobs:
         with:
           projectPath: desktop
           tauriScript: npm run tauri
-          args: -- --bundles nsis,msi
+          args: --bundles nsis,msi
           tagName: ${{ github.ref_name }}
           releaseName: grokbot2api ${{ github.ref_name }}
           releaseDraft: false
