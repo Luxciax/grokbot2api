@@ -89,12 +89,11 @@ impl GatewayManager {
 
     pub fn start(&self, resource_dir: Option<PathBuf>) -> Result<GatewayStatus, String> {
         let settings = secure_store::load_settings();
-        if !secure_store::has_renewal() {
-            return Err(
-                "缺少推理续期凭证（SAND_INFERENCE_RENEWAL_CREDENTIAL / sbi_…）。请在凭证向导中粘贴或导入后再启动。"
-                    .into(),
-            );
-        }
+        let missing_renewal = !secure_store::has_renewal();
+        let renewal_warn = missing_renewal.then_some(
+            "缺少推理续期凭证，网关已启动但推理调用会失败".to_string(),
+        );
+
 
         let mut g = self.inner.lock();
         self.reap_locked(&mut g);
@@ -214,6 +213,11 @@ impl GatewayManager {
         }
         if !ready {
             g.last_error = Some("网关已启动但健康检查超时（仍可能稍后可用）".into());
+        }
+        if g.last_error.is_none() {
+            if let Some(w) = renewal_warn.clone() {
+                g.last_error = Some(w);
+            }
         }
 
         drop(g);

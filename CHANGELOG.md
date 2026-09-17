@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Fix: Start / 启动网关 is clickable without sbi_ renewal; missing renewal is a non-fatal banner + gateway `last_error` warning only.
+- Fix: workbench sidebar sections (模型/密钥/审计/媒体/试用) show section-specific empty states when the gateway is down, so nav feels responsive.
+- Keep: 总览 / 凭证 always work offline; admin `#hash` deep-links still remount the iframe when the gateway is up.
+- Backend: `gateway.rs` `start()` no longer hard-fails on missing renewal; injects renewal env only when present.
+
 ## 0.3.1
 
 - Fix: sidebar navigation no longer forced back to 凭证 when sbi_ / renewal is missing (poll no longer calls setNav).

@@ -151,6 +151,17 @@ export default function App() {
     });
   }
 
+
+  const workbenchSection = NAV_ITEMS.find((n) => n.id === nav);
+  const emptyTitle =
+    nav === "workbench"
+      ? "工作台尚未就绪"
+      : `${workbenchSection?.label ?? "功能页"}尚未就绪`;
+  const emptyBody =
+    nav === "workbench"
+      ? "启动本地网关后，将在此内嵌加载 http://127.0.0.1:<port>/admin。侧栏「模型 / 密钥 / 审计 / 媒体 / 试用」会深链到对应分区。"
+      : `「${workbenchSection?.label ?? nav}」需要本地网关运行后才能打开。可先启动网关，或前往「凭证」检查导入状态。`;
+
   function selectNav(id: NavId) {
     setNav(id);
     if (id !== "overview" && id !== "setup" && running) {
@@ -186,12 +197,7 @@ export default function App() {
           </span>
           <div className="sidebar-actions">
             <button
-              disabled={busy || running || !creds?.has_renewal}
-              title={
-                !creds?.has_renewal
-                  ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
-                  : undefined
-              }
+              disabled={busy || running}
               onClick={() => void onStart()}
             >
               启动
@@ -229,7 +235,7 @@ export default function App() {
           <div className="banners">
             {creds && !creds.has_renewal && (
               <div className="banner warn">
-                缺少推理续期凭证（sbi_…）。浏览各功能页不受影响；启动网关 / 调用推理前请到
+                缺少推理续期凭证（sbi_…）。浏览各功能页不受影响；网关可以启动，但推理调用会失败。请到
                 <button
                   type="button"
                   className="banner-link"
@@ -276,12 +282,7 @@ export default function App() {
                   </ul>
                   <div className="row">
                     <button
-                      disabled={busy || running || !creds?.has_renewal}
-                      title={
-                        !creds?.has_renewal
-                          ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
-                          : undefined
-                      }
+                      disabled={busy || running}
                       onClick={() => void onStart()}
                     >
                       启动网关
@@ -433,20 +434,11 @@ export default function App() {
                 />
               ) : (
                 <div className="empty-state">
-                  <h2>工作台尚未就绪</h2>
-                  <p>
-                    启动本地网关后，将在此内嵌加载{" "}
-                    <code>http://127.0.0.1:&lt;port&gt;/admin</code>
-                    。侧栏「模型 / 密钥 / 审计 / 媒体 / 试用」会深链到对应分区。
-                  </p>
+                  <h2>{emptyTitle}</h2>
+                  <p>{emptyBody}</p>
                   <div className="empty-actions">
                     <button
-                      disabled={busy || !creds?.has_renewal}
-                      title={
-                        !creds?.has_renewal
-                          ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
-                          : undefined
-                      }
+                      disabled={busy}
                       onClick={() => void onStart()}
                     >
                       启动网关并打开工作台
@@ -455,7 +447,7 @@ export default function App() {
                   </div>
                   <ul className="hints">
                     <li>
-                      续期凭证：{creds?.has_renewal ? "已配置" : "缺失（推理必需）"}
+                      续期凭证：{creds?.has_renewal ? "已配置" : "缺失（推理调用需要；启动网关仍可进行）"}
                     </li>
                     <li>机号：{creds?.machine_id || "未导入"}</li>
                     <li>

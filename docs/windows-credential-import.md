@@ -56,7 +56,7 @@ credentials, **not** `sbi_`.
 ### Import UX (desktop/)
 
 1. **导入 Grok Bot 凭证** — OSCrypt path above (machine id + session JWTs)
-2. **粘贴推理续期凭证（sbi_…）** — required for inference; stored via Windows Credential Manager / DPAPI
+2. **粘贴推理续期凭证（sbi_…）** — required for inference calls (gateway may start without it as of 0.3.2); stored via Windows Credential Manager / DPAPI
 3. Optional local proxy API key (`GROK_BUILD_PROXY_API_KEY`)
 
 UI redacts secrets. Logs never print token values. **Session JWT ≠ inference renewal.**

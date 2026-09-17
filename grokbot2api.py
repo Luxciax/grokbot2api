@@ -598,13 +598,26 @@ class SandBackend:
         )
 
     def session_token(self) -> str:
-        """Mint the renewal *session* token (accessToken type session).
+        """Return a Cursor *session* JWT for Dashboard / AiService unary RPCs.
 
-        Used by Dashboard / AiService unary RPCs such as GetSandUsageStatus and
-        RunGenerateImage — not by InferenceService/Stream (which needs grokBotToken).
-        The inference token cache stores grokBotToken under ``accessToken`` and is
-        not interchangeable with this session token.
+        Preference:
+          1. ``SAND_SESSION_TOKEN`` / ``CURSOR_SESSION_TOKEN`` / ``GROKBOT_SESSION_ACCESS_TOKEN``
+             (imported from Grok Bot desktop storage)
+          2. Mint via renewal credential exchange (``sessionToken`` field)
+
+        Not used by InferenceService/Stream (which needs grokBotToken /
+        ``SAND_INFERENCE_RENEWAL_CREDENTIAL``). The inference token cache stores
+        grokBotToken under ``accessToken`` and is not interchangeable with this
+        session token.
         """
+        for env_name in (
+            "SAND_SESSION_TOKEN",
+            "CURSOR_SESSION_TOKEN",
+            "GROKBOT_SESSION_ACCESS_TOKEN",
+        ):
+            override = os.environ.get(env_name, "").strip()
+            if override:
+                return override
         credential = self.module.load_renewal_credential(self.args)
         meta = self.module.client_meta(self.args)
         try:
@@ -1226,12 +1239,24 @@ function authHeaders(extra){const h=Object.assign({'Content-Type':'application/j
 function logout(){localStorage.removeItem('grokbot2api_key'); location.href='/admin';}
 function pct(n){return ((n||0)*100).toFixed(1)+'%';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function showSec(id){
+function showSec(id, syncHash){
+  if(!TITLES[id]) id='overview';
   document.querySelectorAll('main').forEach(el=>el.classList.toggle('active', el.id===id));
   document.querySelectorAll('.navbtn').forEach(el=>el.classList.toggle('active', el.dataset.sec===id));
   document.getElementById('secTitle').textContent=TITLES[id]||id;
+  if(syncHash!==false){
+    const want=id==='overview'?'':id;
+    if((location.hash||'').replace(/^#/,'')!==want){
+      history.replaceState(null,'', want?('#'+want):location.pathname+location.search);
+    }
+  }
   if(id==='media') loadMedia();
 }
+function applyHashRoute(){
+  const h=(location.hash||'').replace(/^#/,'').trim();
+  showSec(h && TITLES[h]?h:'overview', false);
+}
+window.addEventListener('hashchange', applyHashRoute);
 function capsBadges(m){
   const caps=m.capabilities||[];
   let html='';
@@ -1443,7 +1468,7 @@ async function runImage(){
     loadMedia();
   }catch(e){out.innerHTML='<div class="bad">'+esc(e)+'</div>';}
 }
-refreshAll();
+applyHashRoute(); refreshAll();
 setInterval(refreshAll, 20000);
 </script></body></html>
 """

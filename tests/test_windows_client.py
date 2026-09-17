@@ -113,7 +113,7 @@ class DpapiWindowsTests(unittest.TestCase):
 
 
 class DesktopNavAndImportSourceTests(unittest.TestCase):
-    """Static guards for Tauri client fixes (0.3.1 nav trap + accounts map)."""
+    """Static guards for Tauri client fixes (0.3.1 nav trap + 0.3.2 start/empty UX)."""
 
     def test_app_tsx_does_not_force_setup_on_every_poll(self) -> None:
         app = (ROOT / "desktop" / "src" / "App.tsx").read_text(encoding="utf-8")
@@ -122,6 +122,28 @@ class DesktopNavAndImportSourceTests(unittest.TestCase):
         self.assertNotIn("!c.onboarding_done && !c.has_renewal", app)
         self.assertIn('selectNav("setup")', app)  # banner / manual still OK
 
+    def test_start_not_disabled_by_missing_renewal(self) -> None:
+        app = (ROOT / "desktop" / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("disabled={busy || running || !creds?.has_renewal}", app)
+        self.assertNotIn("disabled={busy || !creds?.has_renewal}", app)
+        self.assertIn("emptyTitle", app)
+        self.assertIn("emptyBody", app)
+        types = (ROOT / "desktop" / "src" / "types.ts").read_text(encoding="utf-8")
+        self.assertIn('APP_VERSION = "0.3.2"', types)
+
+    def test_gateway_start_allows_missing_renewal(self) -> None:
+        src = (ROOT / "desktop" / "src-tauri" / "src" / "gateway.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("renewal_warn", src)
+        self.assertIn("missing_renewal", src)
+        # Must not hard-return Err solely because renewal is missing.
+        self.assertNotIn(
+            "请在凭证向导中粘贴或导入后再启动",
+            src,
+        )
+        self.assertIn("缺少推理续期凭证，网关已启动但推理调用会失败", src)
+
     def test_grok_import_handles_accounts_object_map(self) -> None:
         src = (ROOT / "desktop" / "src-tauri" / "src" / "grok_import.rs").read_text(
             encoding="utf-8"
@@ -129,7 +151,6 @@ class DesktopNavAndImportSourceTests(unittest.TestCase):
         self.assertIn("parse_accounts_object_map_prefers_active", src)
         self.assertIn("Some(Value::Object(acct_map))", src)
         self.assertIn("本机未存储会话 JWT", src)
-
 
 if __name__ == "__main__":
     unittest.main()
