@@ -48,10 +48,12 @@ pub struct GatewayManager {
 
 struct GatewayInner {
     child: Option<Child>,
+    adopted: bool,
     last_error: Option<String>,
     python: Option<PathBuf>,
     gateway_root: Option<PathBuf>,
     launch_mode: Option<String>,
+    log_path: Option<PathBuf>,
 }
 
 impl GatewayManager {
@@ -59,10 +61,12 @@ impl GatewayManager {
         Arc::new(Self {
             inner: Mutex::new(GatewayInner {
                 child: None,
+                adopted: false,
                 last_error: None,
                 python: None,
                 gateway_root: None,
                 launch_mode: None,
+                log_path: None,
             }),
         })
     }
@@ -71,7 +75,14 @@ impl GatewayManager {
         let settings = secure_store::load_settings();
         let mut g = self.inner.lock();
         self.reap_locked(&mut g);
-        let running = g.child.is_some();
+        if g.adopted && g.child.is_none() {
+            let host = normalize_listen_host(&settings.host);
+            if !port_serves_our_gateway(&host, settings.port) {
+                g.adopted = false;
+                g.launch_mode = None;
+            }
+        }
+        let running = g.child.is_some() || g.adopted;
         let pid = g.child.as_ref().map(|c| c.id());
         GatewayStatus {
             running,
@@ -88,7 +99,7 @@ impl GatewayManager {
     }
 
     pub fn start(&self, resource_dir: Option<PathBuf>) -> Result<GatewayStatus, String> {
-        let settings = secure_store::load_settings();
+        let mut settings = secure_store::load_settings();
         let missing_renewal = !secure_store::has_renewal();
         let renewal_warn = missing_renewal.then_some(
             "缺少推理续期凭证，网关已启动但推理调用会失败".to_string(),
@@ -97,7 +108,7 @@ impl GatewayManager {
 
         let mut g = self.inner.lock();
         self.reap_locked(&mut g);
-        if g.child.is_some() {
+        if g.child.is_some() || g.adopted {
             drop(g);
             return Ok(self.status());
         }
@@ -107,6 +118,46 @@ impl GatewayManager {
         let _ = std::fs::create_dir_all(&media);
         let admin_config = data.join("admin_config.json");
         let cache = data.join("token-cache.json");
+        let log_path = data.join("gateway.log");
+
+        let listen_host = normalize_listen_host(&settings.host);
+        let preferred = if settings.port == 0 { 18765 } else { settings.port };
+
+        // Already our gateway on preferred port → adopt (no second bind).
+        if port_serves_our_gateway(&listen_host, preferred) {
+            g.adopted = true;
+            g.launch_mode = Some("adopted".into());
+            g.last_error = Some(
+                "端口上已有 grokbot2api（指纹匹配）。工作台将直连该实例。".into(),
+            );
+            drop(g);
+            return Ok(self.status());
+        }
+
+        let chosen = pick_listen_port(&listen_host, preferred).ok_or_else(|| {
+            format!(
+                "端口 {preferred}–{} 均被其他程序占用（非 grokbot2api，常见 Unknown endpoint）。请关闭占用进程或在设置中更换端口。",
+                preferred.saturating_add(20)
+            )
+        })?;
+        let mut port_note: Option<String> = None;
+        if chosen != settings.port {
+            port_note = Some(format!(
+                "原端口 {} 被其他程序占用，已自动改用 {chosen}",
+                settings.port
+            ));
+            settings.port = chosen;
+            let _ = secure_store::save_settings(&settings);
+        }
+
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .map_err(|e| format!("无法打开网关日志 {}: {e}", log_path.display()))?;
+        let log_err = log_file
+            .try_clone()
+            .map_err(|e| format!("无法复制网关日志句柄: {e}"))?;
 
         let mut env: HashMap<String, String> = std::env::vars().collect();
         secure_store::apply_secrets_to_env(&mut env);
@@ -128,14 +179,16 @@ impl GatewayManager {
                 .current_dir(sidecar.parent().unwrap_or_else(|| Path::new(".")))
                 .envs(&env)
                 .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped());
+                .stdout(Stdio::from(log_file))
+                .stderr(Stdio::from(log_err));
             apply_no_window(&mut cmd);
             match cmd.spawn() {
                 Ok(child) => {
                     g.python = Some(sidecar.clone());
                     g.gateway_root = sidecar.parent().map(|p| p.to_path_buf());
                     g.launch_mode = Some("sidecar".into());
+                    g.log_path = Some(log_path.clone());
+                    g.adopted = false;
                     g.last_error = None;
                     g.child = Some(child);
                 }
@@ -174,8 +227,8 @@ impl GatewayManager {
                 .current_dir(&root)
                 .envs(&env)
                 .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped());
+                .stdout(Stdio::from(log_file))
+                .stderr(Stdio::from(log_err));
             apply_no_window(&mut cmd);
 
             match cmd.spawn() {
@@ -183,6 +236,8 @@ impl GatewayManager {
                     g.python = Some(python);
                     g.gateway_root = Some(root);
                     g.launch_mode = Some("python".into());
+                    g.log_path = Some(log_path.clone());
+                    g.adopted = false;
                     g.last_error = None;
                     g.child = Some(child);
                 }
@@ -193,17 +248,24 @@ impl GatewayManager {
             }
         }
 
-        let url = format!("http://{}:{}/health", settings.host, settings.port);
-        let deadline = Instant::now() + Duration::from_secs(12);
+        let url = format!("http://{}:{}/health", listen_host, settings.port);
+        let deadline = Instant::now() + Duration::from_secs(15);
         let mut ready = false;
         while Instant::now() < deadline {
             self.reap_locked(&mut g);
             if g.child.is_none() {
+                let tail = read_log_tail(g.log_path.as_deref(), 1200);
                 let err = g
                     .last_error
                     .clone()
                     .unwrap_or_else(|| "网关进程已退出".into());
-                return Err(err);
+                let msg = if tail.is_empty() {
+                    err
+                } else {
+                    format!("{err}\n---- gateway.log ----\n{tail}")
+                };
+                g.last_error = Some(msg.clone());
+                return Err(msg);
             }
             if http_ok(&url) {
                 ready = true;
@@ -212,13 +274,35 @@ impl GatewayManager {
             std::thread::sleep(Duration::from_millis(250));
         }
         if !ready {
-            g.last_error = Some("网关已启动但健康检查超时（仍可能稍后可用）".into());
-        }
-        if g.last_error.is_none() {
-            if let Some(w) = renewal_warn.clone() {
-                g.last_error = Some(w);
+            let tail = read_log_tail(g.log_path.as_deref(), 1200);
+            let _ = g.child.take().map(|mut c| {
+                let _ = c.kill();
+                let _ = c.wait();
+            });
+            let mut msg = format!(
+                "网关未能通过健康检查（/health 需返回 grokbot2api 指纹，含 ok+version）。日志: {}",
+                log_path.display()
+            );
+            if !tail.is_empty() {
+                msg.push_str("\n---- gateway.log ----\n");
+                msg.push_str(&tail);
             }
+            g.last_error = Some(msg.clone());
+            return Err(msg);
         }
+
+        let mut notes: Vec<String> = Vec::new();
+        if let Some(n) = port_note {
+            notes.push(n);
+        }
+        if let Some(w) = renewal_warn {
+            notes.push(w);
+        }
+        g.last_error = if notes.is_empty() {
+            None
+        } else {
+            Some(notes.join("；"))
+        };
 
         drop(g);
         Ok(self.status())
@@ -230,7 +314,9 @@ impl GatewayManager {
             let _ = child.kill();
             let _ = child.wait();
         }
+        g.adopted = false;
         g.last_error = None;
+        g.launch_mode = None;
         drop(g);
         Ok(self.status())
     }
@@ -239,7 +325,15 @@ impl GatewayManager {
         if let Some(child) = g.child.as_mut() {
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    g.last_error = Some(format!("网关已退出: {status}"));
+                    let tail = read_log_tail(g.log_path.as_deref(), 800);
+                    let mut msg = format!("网关已退出: {status}");
+                    if !tail.is_empty() {
+                        msg.push_str("
+---- gateway.log ----
+");
+                        msg.push_str(&tail);
+                    }
+                    g.last_error = Some(msg);
                     g.child = None;
                 }
                 Ok(None) => {}
@@ -260,6 +354,49 @@ fn apply_no_window(cmd: &mut Command) {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     let _ = cmd;
+}
+
+
+fn normalize_listen_host(host: &str) -> String {
+    let h = host.trim();
+    if h.is_empty() || h == "0.0.0.0" || h == "::" || h == "*" {
+        "127.0.0.1".into()
+    } else {
+        h.to_string()
+    }
+}
+
+fn port_serves_our_gateway(host: &str, port: u16) -> bool {
+    http_ok(&format!("http://{host}:{port}/health"))
+}
+
+fn port_accepts_tcp(host: &str, port: u16) -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    let Ok(mut iter) = (host, port).to_socket_addrs() else {
+        return false;
+    };
+    let Some(addr) = iter.next() else {
+        return false;
+    };
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
+/// Prefer `start`, then start+1 .. start+20. Skip foreign responders. None if all busy.
+fn pick_listen_port(host: &str, start: u16) -> Option<u16> {
+    for port in start..=start.saturating_add(20) {
+        if port == 0 {
+            continue;
+        }
+        if port_serves_our_gateway(host, port) {
+            // Caller handles adopt; treating as usable for bind would fail.
+            continue;
+        }
+        if !port_accepts_tcp(host, port) {
+            return Some(port);
+        }
+        // TCP accepts but not our fingerprint → foreign, skip.
+    }
+    None
 }
 
 fn http_ok(url: &str) -> bool {
@@ -285,20 +422,72 @@ fn http_ok(url: &str) -> bool {
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(400)) else {
         return false;
     };
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(600)));
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(600)));
     let req = format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
     if stream.write_all(req.as_bytes()).is_err() {
         return false;
     }
-    let mut buf = [0u8; 128];
-    let Ok(n) = stream.read(&mut buf) else {
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 1024];
+    loop {
+        match stream.read(&mut tmp) {
+            Ok(0) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&tmp[..n]);
+                if buf.len() > 8192 {
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    if buf.is_empty() {
         return false;
+    }
+    let resp = String::from_utf8_lossy(&buf);
+    let status_ok = resp.contains(" 200 ")
+        || resp.starts_with("HTTP/1.1 200")
+        || resp.starts_with("HTTP/1.0 200");
+    if !status_ok {
+        return false;
+    }
+    let body_start = resp
+        .find("\r\n\r\n")
+        .map(|i| i + 4)
+        .or_else(|| resp.find("\n\n").map(|i| i + 2))
+        .unwrap_or(resp.len());
+    let body = &resp[body_start.min(resp.len())..];
+    is_our_health_body(body)
+}
+
+fn is_our_health_body(body: &str) -> bool {
+    let lower = body.to_ascii_lowercase();
+    if lower.contains("unknown endpoint") {
+        return false;
+    }
+    if body.contains("\"service\"") && body.contains("grokbot2api") && body.contains("\"ok\"") {
+        return true;
+    }
+    let has_ok = body.contains("\"ok\"") && body.contains("true");
+    let has_version = body.contains("\"version\"");
+    let has_admin = body.contains("\"admin\"") && body.contains("/admin");
+    has_ok && has_version && has_admin
+}
+
+fn read_log_tail(path: Option<&Path>, max_bytes: usize) -> String {
+    let Some(path) = path else {
+        return String::new();
     };
-    let head = String::from_utf8_lossy(&buf[..n]);
-    head.contains(" 200 ")
-        || head.starts_with("HTTP/1.1 200")
-        || head.starts_with("HTTP/1.0 200")
+    let Ok(data) = std::fs::read(path) else {
+        return String::new();
+    };
+    let slice = if data.len() > max_bytes {
+        &data[data.len() - max_bytes..]
+    } else {
+        &data[..]
+    };
+    String::from_utf8_lossy(slice).trim().to_string()
 }
 
 fn find_python() -> Option<PathBuf> {
@@ -410,4 +599,28 @@ pub fn admin_url_for(settings: &AppSettings) -> String {
 #[allow(dead_code)]
 pub fn gateway_modules() -> &'static [&'static str] {
     GATEWAY_MODULES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_our_health_body;
+
+    #[test]
+    fn rejects_unknown_endpoint() {
+        assert!(!is_our_health_body(r#"{"error":"Unknown endpoint"}"#));
+    }
+
+    #[test]
+    fn accepts_service_fingerprint() {
+        assert!(is_our_health_body(
+            r#"{"ok":true,"service":"grokbot2api","version":"0.3.3","admin":"/admin"}"#
+        ));
+    }
+
+    #[test]
+    fn accepts_legacy_ok_version_admin() {
+        assert!(is_our_health_body(
+            r#"{"ok":true,"version":"0.3.0","admin":"/admin"}"#
+        ));
+    }
 }

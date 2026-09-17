@@ -51,7 +51,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.0"
+__version__ = "0.3.3"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -579,18 +579,37 @@ class SandBackend:
         )
         self.args.conversation_id = self.module.resolve_conversation_id(self.args)
 
+        # Allow HTTP listen (/health, /admin) without renewal; fail at inference time.
         env_credential = os.environ.get(self.module.CREDENTIAL_ENV, "").strip()
-        if env_credential:
-            self.args.credential = env_credential
-        else:
-            raise RuntimeError(
-                f"set {self.module.CREDENTIAL_ENV} to a valid credential before starting the proxy"
+        self.args.credential = env_credential or None
+        self.renewal_configured = bool(env_credential)
+        if not self.renewal_configured:
+            print(
+                f"warning: {self.module.CREDENTIAL_ENV} not set; "
+                "/health and /admin will work but inference will fail until it is configured",
+                file=sys.stderr,
+                flush=True,
             )
         media_dir = getattr(options, "media_dir", None)
         self.media_store = image_gen.MediaStore(Path(media_dir) if media_dir else None)
 
+    def ensure_renewal_credential(self) -> None:
+        """Raise when inference/usage needs sbi_ but none was configured at start."""
+        if getattr(self.args, "credential", None):
+            return
+        env_name = getattr(self.module, "CREDENTIAL_ENV", "SAND_INFERENCE_RENEWAL_CREDENTIAL")
+        env_credential = os.environ.get(env_name, "").strip()
+        if env_credential:
+            self.args.credential = env_credential
+            self.renewal_configured = True
+            return
+        raise RuntimeError(
+            f"set {env_name} to a valid credential before calling inference"
+        )
+
     def sand_usage(self) -> dict[str, Any]:
         """Read the account's sand allowance status (percent used, reset time)."""
+        self.ensure_renewal_credential()
         credential = self.module.load_renewal_credential(self.args)
         meta = self.module.client_meta(self.args)
         return self.module.fetch_sand_usage(
@@ -618,6 +637,7 @@ class SandBackend:
             override = os.environ.get(env_name, "").strip()
             if override:
                 return override
+        self.ensure_renewal_credential()
         credential = self.module.load_renewal_credential(self.args)
         meta = self.module.client_meta(self.args)
         try:
@@ -716,6 +736,7 @@ class SandBackend:
             spec = self.resolve_model(client_model)
             self.args.model = spec.upstream_id
             model_params = list(spec.params)
+            self.ensure_renewal_credential()
             credential = self.module.load_renewal_credential(self.args)
             meta = self.module.client_meta(self.args)
             token = self.module.get_access_token(self.args, credential, meta)
@@ -1567,15 +1588,18 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             catalogue = self.server.catalogue.snapshot()
             enabled = sum(1 for m in catalogue.get("models") or [] if m.get("enabled"))
             stats = self.server.stats.snapshot()
+            renewal_ok = bool(getattr(getattr(self.server, "backend", None), "renewal_configured", True))
             self.send_json(
                 200,
                 {
                     "ok": True,
+                    "service": "grokbot2api",
                     "version": getattr(self.server, "version", __version__),
                     "uptime_seconds": stats.get("uptime_seconds", 0),
                     "models_enabled": enabled,
                     "models_total": len(catalogue.get("models") or []),
                     "default_model": catalogue.get("default_alias") or self.server.catalogue.default_alias,
+                    "renewal_configured": renewal_ok,
                     "docs": "/docs",
                     "admin": "/admin",
                 },
@@ -2185,7 +2209,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--listen", default="127.0.0.1", help="listen address; keep loopback unless API auth is enabled")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=18765)
     parser.add_argument(
         "--model",
         default="grok-4.6",

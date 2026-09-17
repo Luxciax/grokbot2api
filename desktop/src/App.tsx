@@ -488,7 +488,7 @@ export default function App() {
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    port: Number(e.target.value) || 8765,
+                    port: Number(e.target.value) || 18765,
                   })
                 }
               />

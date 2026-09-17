@@ -34,7 +34,7 @@ impl AppSettings {
     pub fn default_settings() -> Self {
         Self {
             host: "127.0.0.1".into(),
-            port: 8765,
+            port: 18765,
             machine_id: String::new(),
             onboarding_done: false,
             profile_email: String::new(),

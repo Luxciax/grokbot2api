@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3
+
+- Fix: gateway starts without `SAND_INFERENCE_RENEWAL_CREDENTIAL` / sbi_ — `/health` and `/admin` work; inference fails later with a clear error.
+- Fix: Tauri health probe requires grokbot2api JSON fingerprint (`service` / `ok`+`version`+`admin`); rejects foreign `{"error":"Unknown endpoint"}` on :8765.
+- Fix: if configured port is occupied by a non-grokbot2api process, auto-pick next free port (up to +20) and persist settings.
+- Fix: never report gateway started when fingerprint health fails; kill child and surface `gateway.log` tail.
+- Fix: child stdout/stderr appended to local app data `gateway.log`.
+- Change: default listen port **18765** (avoids common :8765 conflicts).
+- CSP: allow iframe/connect to any `127.0.0.1` / `localhost` port.
+
+
 ## 0.3.2
 
 - Fix: Start / 启动网关 is clickable without sbi_ renewal; missing renewal is a non-fatal banner + gateway `last_error` warning only.
