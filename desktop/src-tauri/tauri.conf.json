@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "grokbot2api",
+  "version": "0.3.0",
+  "identifier": "com.luxciax.grokbot2api",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run sync-gateway && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "grokbot2api",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: blob: https://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-src http://127.0.0.1:8765 http://localhost:8765; connect-src ipc: http://ipc.localhost http://127.0.0.1:8765 http://localhost:8765"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/gateway"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
+        "displayLanguageSelector": true
+      }
+    },
+    "shortDescription": "本地 grokbot2api 网关桌面客户端",
+    "longDescription": "嵌入式管理台 + 本地 Python 网关启停。从 Grok Bot 导入可解密的机号与会话令牌；推理续期凭证仍需粘贴。",
+    "publisher": "Luxciax",
+    "copyright": "MIT"
+  },
+  "plugins": {}
+}

@@ -1,0 +1,4 @@
+# Build-only dependencies for Windows packaging (not required to run from source).
+pyinstaller>=6.3
+pystray>=0.19
+Pillow>=10.0

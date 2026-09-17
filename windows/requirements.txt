@@ -1,0 +1,4 @@
+# Optional runtime extras for a nicer tray experience when running from source.
+# The client falls back to a small Tk window if these are missing.
+pystray>=0.19
+Pillow>=10.0

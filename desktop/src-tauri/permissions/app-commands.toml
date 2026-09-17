@@ -1,0 +1,54 @@
+[[permission]]
+identifier = "allow-import-grok-bot-credentials"
+description = "允许从本机 Grok Bot 导入可解密凭证元数据"
+commands.allow = ["import_grok_bot_credentials"]
+
+[[permission]]
+identifier = "allow-start-gateway"
+description = "允许启动本地网关进程"
+commands.allow = ["start_gateway"]
+
+[[permission]]
+identifier = "allow-stop-gateway"
+description = "允许停止本地网关进程"
+commands.allow = ["stop_gateway"]
+
+[[permission]]
+identifier = "allow-gateway-status"
+description = "允许查询网关状态"
+commands.allow = ["gateway_status"]
+
+[[permission]]
+identifier = "allow-get-settings"
+description = "允许读取非机密设置"
+commands.allow = ["get_settings"]
+
+[[permission]]
+identifier = "allow-save-settings"
+description = "允许保存非机密设置"
+commands.allow = ["save_settings"]
+
+[[permission]]
+identifier = "allow-get-credential-status"
+description = "允许查询凭证状态（不含明文）"
+commands.allow = ["get_credential_status"]
+
+[[permission]]
+identifier = "allow-set-renewal-credential"
+description = "允许保存推理续期凭证"
+commands.allow = ["set_renewal_credential"]
+
+[[permission]]
+identifier = "allow-set-api-key"
+description = "允许保存本地代理 API Key"
+commands.allow = ["set_api_key"]
+
+[[permission]]
+identifier = "allow-clear-imported-session"
+description = "允许清除已导入的会话令牌"
+commands.allow = ["clear_imported_session"]
+
+[[permission]]
+identifier = "allow-get-admin-url"
+description = "允许获取工作台 URL"
+commands.allow = ["get_admin_url"]

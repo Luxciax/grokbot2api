@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "主窗口能力：网关控制、凭证导入、设置、托盘",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:default",
+    "core:tray:default",
+    "core:app:default",
+    "opener:default",
+    "allow-import-grok-bot-credentials",
+    "allow-start-gateway",
+    "allow-stop-gateway",
+    "allow-gateway-status",
+    "allow-get-settings",
+    "allow-save-settings",
+    "allow-get-credential-status",
+    "allow-set-renewal-credential",
+    "allow-set-api-key",
+    "allow-clear-imported-session",
+    "allow-get-admin-url"
+  ]
+}
