@@ -18,7 +18,10 @@ Relevant keys:
 
 - `cursor-machine-id` — safeStorage `v10` blob → UUID (registered machine id)
 - `local-exec-file-key` — safeStorage → base64 of a 32-byte AES key (local-exec sealed files)
-- `cursor-accounts` — plaintext JSON string; per-account tokens are safeStorage base64 (`djEw…`)
+- `cursor-accounts` — plaintext JSON string shaped as
+  `{ "active": "<64-hex>", "accounts": { "<64-hex>": { … } } }`
+  (`accounts` is an **object map**, not an array; legacy array still accepted).
+  Per-account `cursor-access-token` / `cursor-refresh-token` values are safeStorage base64 (`djEw…` / v10)
 
 ### Decrypt path
 
@@ -74,3 +77,9 @@ for development) and injects values into the gateway child process environment:
 - Gateway: `sand_inference.py`, `grokbot2api.py`
 - Tauri client: `desktop/`
 - Legacy tray (deprecated): `windows/`
+
+
+## B) Best-effort renewal discovery
+
+Scans known Grok Bot / `.grokbot` files for `sbi_…`. Often empty — paste remains supported.
+Secrets stay in the OS credential store; the UI never receives plaintext tokens.

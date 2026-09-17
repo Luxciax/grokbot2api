@@ -241,3 +241,16 @@ label { display: block; margin: 12px 0; font-size: 13px; color: var(--muted); }
   .nav-item { width: auto; }
   .sidebar-foot { flex-direction: row; align-items: center; flex: 1 1 100%; border-top: none; }
 }
+
+.banner-link {
+  display: inline;
+  margin: 0 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #f0d18a;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.banner-link:hover { color: #ffe6a8; }

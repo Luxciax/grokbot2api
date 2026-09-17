@@ -5,9 +5,10 @@
 //!     CryptUnprotectData(blob) → 32-byte AES key (Chromium OSCrypt).
 //!   - `sand-secrets.json`:
 //!       - `cursor-machine-id`: base64 v10 blob → UTF-8 machine id (UUID)
-//!       - `cursor-accounts`: **plaintext JSON** `{active, accounts}` where each
-//!         account has `cursor-access-token` / `cursor-refresh-token` whose *values*
-//!         are base64 `v10`+nonce+ciphertext AES-GCM with the OSCrypt key
+//!       - `cursor-accounts`: **plaintext JSON** `{active, accounts}` where
+//!         `accounts` is an **object map** keyed by account id (legacy: array);
+//!         each account has `cursor-access-token` / `cursor-refresh-token` whose
+//!         *values* are base64 `v10`+nonce+ciphertext AES-GCM with the OSCrypt key
 //!       - `local-exec-file-key`: same v10 style (ignored here)
 //!
 //! What we import:
@@ -90,7 +91,7 @@ fn extract_string(obj: &Value, keys: &[&str]) -> Option<String> {
     None
 }
 
-/// Parse `{active, accounts:[…]}` (or a lone account / array) and decrypt nested tokens.
+/// Parse `{active, accounts:{id→account}}` (object map; legacy array OK) and decrypt nested tokens.
 fn parse_cursor_accounts(
     master_key: &Option<MasterKey>,
     plain: &str,
@@ -108,25 +109,45 @@ fn parse_cursor_accounts(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    // Collect account records. Real Grok Bot shape is:
+    //   { "active": "<64-hex>", "accounts": { "<64-hex>": { …tokens… } } }
+    // Legacy / alternate shapes: accounts as Array, or a lone account object.
     let mut records: Vec<&Value> = Vec::new();
     match &val {
         Value::Array(arr) => records.extend(arr.iter()),
         Value::Object(map) => {
-            if let Some(Value::Array(arr)) = map.get("accounts") {
-                records.extend(arr.iter());
-            } else if map.contains_key("cursor-access-token")
-                || map.contains_key("accessToken")
-                || map.contains_key("cursor-refresh-token")
-            {
-                records.push(&val);
-            } else if let Some(Value::Object(_)) = map.get("accounts") {
-                records.push(map.get("accounts").unwrap());
+            match map.get("accounts") {
+                Some(Value::Array(arr)) => records.extend(arr.iter()),
+                Some(Value::Object(acct_map)) => {
+                    // Prefer the active key first, then remaining values.
+                    if let Some(ref aid) = active_id {
+                        if let Some(preferred) = acct_map.get(aid.as_str()) {
+                            records.push(preferred);
+                        }
+                        for (k, v) in acct_map {
+                            if Some(k.as_str()) != active_id.as_deref() {
+                                records.push(v);
+                            }
+                        }
+                    } else {
+                        records.extend(acct_map.values());
+                    }
+                }
+                _ => {
+                    if map.contains_key("cursor-access-token")
+                        || map.contains_key("accessToken")
+                        || map.contains_key("cursor-refresh-token")
+                        || map.contains_key("refreshToken")
+                    {
+                        records.push(&val);
+                    }
+                }
             }
         }
         _ => {}
     }
 
-    // Prefer the active account when ids match.
+    // Prefer the active account when ids match (array / nested id fields).
     if let Some(ref aid) = active_id {
         if let Some(pos) = records.iter().position(|rec| {
             extract_string(rec, &["id", "accountId", "account_id", "email"])
@@ -208,10 +229,28 @@ fn parse_cursor_accounts(
     (access, refresh, email)
 }
 
-/// Scan known text/json files for classic `sbi_…` renewal credentials (~47 chars).
+/// Scan known text/json files + process env for classic `sbi_…` renewal credentials.
+/// Best-effort only; never logs matched values. `.grokbot` sealed blobs are often
+/// `slx_` (not `sbi_`) and are still scanned safely as opaque text.
 fn discover_sbi_renewal(dirs: &[PathBuf]) -> Option<String> {
     // sbi_ + ~43 url-safe chars ≈ 47 total (allow a range)
     let re = regex_lite_sbi();
+
+    // Current process environment (e.g. user already exported SAND_INFERENCE_…)
+    for (k, v) in std::env::vars() {
+        let key_l = k.to_ascii_lowercase();
+        if key_l.contains("renewal")
+            || key_l.contains("sbi")
+            || key_l.contains("inference")
+            || key_l.contains("sand")
+            || v.contains("sbi_")
+        {
+            if let Some(found) = re.find(&v) {
+                return Some(found.to_string());
+            }
+        }
+    }
+
     let names = [
         "sand-secrets.json",
         "gateway-descriptor.json",
@@ -220,6 +259,9 @@ fn discover_sbi_renewal(dirs: &[PathBuf]) -> Option<String> {
         "config.json",
         "credentials.json",
         ".env",
+        "env.json",
+        "settings.json",
+        "user-settings.json",
     ];
     for dir in dirs {
         for name in names {
@@ -461,11 +503,13 @@ pub fn import_from_grok_bot() -> Result<ImportResult, StoreError> {
     let has_refresh = refresh.is_some() || secure_store::has_refresh_token();
 
     let note = if renewal_found {
-        "已从 Grok Bot 导入会话凭证，并发现续期凭证（sbi_…）。".into()
-    } else if has_access || machine_id.is_some() {
-        "已从 Grok Bot 导入会话凭证。未在本地文件中发现 sbi_ 续期凭证 — 请手动粘贴 SAND_INFERENCE_RENEWAL_CREDENTIAL（会话 JWT 不能用于推理）。".into()
+        "已从 Grok Bot 导入机号/会话，并发现续期凭证（sbi_…）。".into()
+    } else if has_access || has_refresh {
+        "已从 Grok Bot 导入会话 JWT。未在本地发现 sbi_ 续期凭证 — 请手动粘贴 SAND_INFERENCE_RENEWAL_CREDENTIAL（会话 JWT 不能用于推理）。".into()
+    } else if machine_id.is_some() {
+        "已导入机号。本机未存储会话 JWT（access/refresh）；仍可粘贴 sbi_ 续期凭证后启动推理。会话 JWT 不能替代 sbi_。".into()
     } else {
-        "导入未获得可用会话凭证；请检查 Grok Bot 是否已登录，或手动粘贴续期凭证。".into()
+        "导入未获得机号或会话凭证；请检查 Grok Bot 是否已登录，或手动粘贴续期凭证（sbi_…）。".into()
     };
 
     Ok(ImportResult {
@@ -493,11 +537,34 @@ mod tests {
     }
 
     #[test]
-    fn parse_accounts_nested_plaintext_json() {
+    fn parse_accounts_array_legacy() {
         let json = r#"{"active":"a1","accounts":[{"id":"a1","cursor-access-token":"eyJhbGciOiJ.test.sig","cursor-refresh-token":"eyJhbGciOiJ.refresh.sig","profile":{"email":"u@example.com"}}]}"#;
         let (a, r, e) = parse_cursor_accounts(&None, json);
         assert!(a.unwrap().starts_with("eyJ"));
         assert!(r.unwrap().starts_with("eyJ"));
         assert_eq!(e.as_deref(), Some("u@example.com"));
+    }
+
+    /// Real Windows Grok Bot shape: accounts is an object map keyed by hex id.
+    #[test]
+    fn parse_accounts_object_map_prefers_active() {
+        let active = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899";
+        let other = "11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff";
+        let json = format!(
+            r#"{{"active":"{active}","accounts":{{"{other}":{{"cursor-access-token":"eyJhbGciOiJ.other.sig","cursor-refresh-token":"eyJhbGciOiJ.otherref.sig","email":"other@example.com"}},"{active}":{{"cursor-access-token":"eyJhbGciOiJ.active.sig","cursor-refresh-token":"eyJhbGciOiJ.activeref.sig","email":"active@example.com"}}}}}}"#
+        );
+        let (a, r, e) = parse_cursor_accounts(&None, &json);
+        assert_eq!(a.as_deref(), Some("eyJhbGciOiJ.active.sig"));
+        assert_eq!(r.as_deref(), Some("eyJhbGciOiJ.activeref.sig"));
+        assert_eq!(e.as_deref(), Some("active@example.com"));
+    }
+
+    #[test]
+    fn parse_accounts_object_map_without_active_still_reads_values() {
+        let json = r#"{"accounts":{"deadbeef":{"cursor-access-token":"eyJhbGciOiJ.only.sig","cursor-refresh-token":"eyJhbGciOiJ.onlyref.sig"}}}"#;
+        let (a, r, e) = parse_cursor_accounts(&None, json);
+        assert!(a.unwrap().contains("only"));
+        assert!(r.unwrap().contains("onlyref"));
+        assert!(e.is_none());
     }
 }

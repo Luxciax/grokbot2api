@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import type {
   AppSettings,
@@ -23,6 +23,8 @@ export default function App() {
   const [renewalInput, setRenewalInput] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [iframeKey, setIframeKey] = useState(0);
+  /** Only auto-route to setup on the very first credential load — never on poll. */
+  const initialNavApplied = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -34,8 +36,14 @@ export default function App() {
       setStatus(g);
       setCreds(c);
       setSettings(s);
-      if (!c.onboarding_done && !c.has_renewal) {
-        setNav("setup");
+      // First launch only: land on 凭证 if onboarding unfinished.
+      // Do NOT re-force setup on the 3s poll — that trapped every sidebar click
+      // whenever sbi_ / has_renewal was still missing.
+      if (!initialNavApplied.current) {
+        initialNavApplied.current = true;
+        if (!c.onboarding_done) {
+          setNav("setup");
+        }
       }
     } catch (e) {
       setError(String(e));
@@ -108,6 +116,8 @@ export default function App() {
       await api.setRenewalCredential(renewalInput);
       setRenewalInput("");
       setMessage("续期凭证已安全保存（不会回显）");
+      // Stay out of the import trap: after successful sbi_ save, go to 工作台.
+      setNav("workbench");
     });
   }
 
@@ -175,7 +185,15 @@ export default function App() {
             {running ? `运行中 · ${status?.port}` : "已停止"}
           </span>
           <div className="sidebar-actions">
-            <button disabled={busy || running} onClick={() => void onStart()}>
+            <button
+              disabled={busy || running || !creds?.has_renewal}
+              title={
+                !creds?.has_renewal
+                  ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
+                  : undefined
+              }
+              onClick={() => void onStart()}
+            >
               启动
             </button>
             <button disabled={busy || !running} onClick={() => void onStop()}>
@@ -207,8 +225,21 @@ export default function App() {
           </div>
         </header>
 
-        {(message || error || status?.last_error) && (
+        {(message || error || status?.last_error || (creds && !creds.has_renewal)) && (
           <div className="banners">
+            {creds && !creds.has_renewal && (
+              <div className="banner warn">
+                缺少推理续期凭证（sbi_…）。浏览各功能页不受影响；启动网关 / 调用推理前请到
+                <button
+                  type="button"
+                  className="banner-link"
+                  onClick={() => selectNav("setup")}
+                >
+                  凭证
+                </button>
+                页粘贴保存。会话 JWT 不能替代 sbi_。
+              </div>
+            )}
             {message && <div className="banner info">{message}</div>}
             {error && <div className="banner err">{error}</div>}
             {status?.last_error && (
@@ -244,7 +275,15 @@ export default function App() {
                     </li>
                   </ul>
                   <div className="row">
-                    <button disabled={busy || running} onClick={() => void onStart()}>
+                    <button
+                      disabled={busy || running || !creds?.has_renewal}
+                      title={
+                        !creds?.has_renewal
+                          ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
+                          : undefined
+                      }
+                      onClick={() => void onStart()}
+                    >
                       启动网关
                     </button>
                     <button disabled={busy || !running} onClick={() => void onStop()}>
@@ -269,11 +308,19 @@ export default function App() {
                     </li>
                     <li>
                       <span>会话 access</span>
-                      <span>{creds?.has_access_token ? "已导入" : "无"}</span>
+                      <span>
+                        {creds?.has_access_token
+                          ? "已导入"
+                          : "本机未存储会话 JWT"}
+                      </span>
                     </li>
                     <li>
                       <span>会话 refresh</span>
-                      <span>{creds?.has_refresh_token ? "已导入" : "无"}</span>
+                      <span>
+                        {creds?.has_refresh_token
+                          ? "已导入"
+                          : "本机未存储会话 JWT"}
+                      </span>
                     </li>
                     <li>
                       <span>机号</span>
@@ -314,8 +361,8 @@ export default function App() {
                     <div>机号：{importResult.machine_id || "—"}</div>
                     <div>
                       access / refresh：
-                      {importResult.has_access_token ? "有" : "无"} /{" "}
-                      {importResult.has_refresh_token ? "有" : "无"}
+                      {importResult.has_access_token ? "有" : "本机未存储"} /{" "}
+                      {importResult.has_refresh_token ? "有" : "本机未存储"}
                     </div>
                     <div>
                       续期凭证：
@@ -336,6 +383,7 @@ export default function App() {
                   。请粘贴 <code>sbi_</code> 开头的续期凭证。
                 </p>
                 <textarea
+                  id="renewal-credential-input"
                   rows={3}
                   placeholder="粘贴 sbi_… 续期凭证（保存后不会回显）"
                   value={renewalInput}
@@ -392,7 +440,15 @@ export default function App() {
                     。侧栏「模型 / 密钥 / 审计 / 媒体 / 试用」会深链到对应分区。
                   </p>
                   <div className="empty-actions">
-                    <button disabled={busy} onClick={() => void onStart()}>
+                    <button
+                      disabled={busy || !creds?.has_renewal}
+                      title={
+                        !creds?.has_renewal
+                          ? "缺少 sbi_ 续期凭证：请在「凭证」页粘贴后再启动"
+                          : undefined
+                      }
+                      onClick={() => void onStart()}
+                    >
                       启动网关并打开工作台
                     </button>
                     <button onClick={() => selectNav("setup")}>先完成凭证配置</button>

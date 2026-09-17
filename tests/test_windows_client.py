@@ -111,5 +111,25 @@ class DpapiWindowsTests(unittest.TestCase):
         self.assertEqual(cred._unprotect(blob, method), b"hello-dpapi")
 
 
+
+class DesktopNavAndImportSourceTests(unittest.TestCase):
+    """Static guards for Tauri client fixes (0.3.1 nav trap + accounts map)."""
+
+    def test_app_tsx_does_not_force_setup_on_every_poll(self) -> None:
+        app = (ROOT / "desktop" / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("initialNavApplied", app)
+        # Must not gate poll refresh on has_renewal alone.
+        self.assertNotIn("!c.onboarding_done && !c.has_renewal", app)
+        self.assertIn('selectNav("setup")', app)  # banner / manual still OK
+
+    def test_grok_import_handles_accounts_object_map(self) -> None:
+        src = (ROOT / "desktop" / "src-tauri" / "src" / "grok_import.rs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("parse_accounts_object_map_prefers_active", src)
+        self.assertIn("Some(Value::Object(acct_map))", src)
+        self.assertIn("本机未存储会话 JWT", src)
+
+
 if __name__ == "__main__":
     unittest.main()

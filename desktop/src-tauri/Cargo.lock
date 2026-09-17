@@ -1457,16 +1457,15 @@ dependencies = [
 
 [[package]]
 name = "grokbot2api-desktop"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
- "aes-gcm",
  "base64 0.22.1",
  "dirs",
  "keyring",
+ "os_crypt",
  "parking_lot",
  "serde",
  "serde_json",
- "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
@@ -2519,6 +2518,18 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
+]
+
+[[package]]
+name = "os_crypt"
+version = "0.3.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "serde_json",
+ "thiserror 2.0.20",
+ "windows 0.58.0",
+ "zeroize",
 ]
 
 [[package]]
