@@ -598,4 +598,14 @@ Cursor publishes other supported integration surfaces, including the `sdk.v1` SD
 
 ## Entitlement note (2026-09-28)
 
-Official Grok Bot desktop chat uses `GrokBotService/SendGrokBotUserMessage`. This proxy uses `InferenceService/Stream`. On SuperGrok + Cursor Free with `noUsageBasedAllowed=true`, Stream returns ERROR_NOT_HIGH_ENOUGH_PERMISSIONS despite working usage and official chat. Header tweaks alone do not fix it.
+## GrokBotService chat (official UI path)
+
+Official Grok Bot 0.58 desktop chat does **not** call `InferenceService/Stream`. It uses Connect JSON unary RPCs on `aiserver.v1.GrokBotService` with the **session** JWT (`type=session` from `/sand-box/inference-credential`):
+
+1. `ListGrokBotAgents` / `CreateGrokBotAgent` — resolve `agent_id`
+2. `SendGrokBotUserMessage` — `agent_id`, `message_id` (client nonce), `text`, `sent_at_ms`, `source=DESKTOP`, `session_id`, `machine_id`
+3. `GetGrokBotSendStatus` — wait until `ACCEPTED` (`echo_entry_id`)
+4. `ListGrokBotTranscriptEntries` — newest-first; assistant text is `kind=send-message` with body JSON `{"kind":"send-message","message":{"type":"text","content":"..."}}` (body bytes base64 over Connect JSON)
+
+`grokBotToken` on GrokBotService → `ERROR_NOT_LOGGED_IN`. Session JWT on Stream → `ERROR_NOT_LOGGED_IN`. Stream with `grokBotToken` on SuperGrok + Cursor Free → `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS`. Default bridge mode is GrokBotService (`GROKBOT_CHAT_MODE=agent`).
+

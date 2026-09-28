@@ -39,12 +39,12 @@ class NativeProtocolTests(unittest.TestCase):
         import model_catalogue
 
         backend = bridge.SandBackend.__new__(bridge.SandBackend)
-        backend.options = SimpleNamespace(model="grok-4.6")
+        backend.options = SimpleNamespace(model="grok-4.7-high", chat_mode="stream")
         backend.args = SimpleNamespace(model="", credential="credential")
         backend.lock = threading.Lock()
         backend.catalogue = model_catalogue.ModelCatalogue(
             config_path=Path("/tmp/grokbot2api-native-admin.json"),
-            fallback_upstream="grok-4.6",
+            fallback_upstream="grok-4.7-high",
         )
         backend.module = SimpleNamespace(
             load_renewal_credential=lambda args: "credential",
@@ -60,7 +60,7 @@ class NativeProtocolTests(unittest.TestCase):
         with mock.patch.object(bridge, "native_stream_llm", side_effect=fake_native_stream):
             result = backend.infer_native("cursor-grok-4-6", [], [], {})
 
-        self.assertEqual(result["model"], "cursor-grok-4.6-high")
+        self.assertEqual(result["resolvedUpstream"], "cursor-grok-4.6-high")
         self.assertEqual(backend.args.model, "cursor-grok-4.6-high")
 
     def test_request_contains_messages_tools_and_requested_model(self):

@@ -37,6 +37,7 @@ from api_common import (
     normalize_tool_call_id,
 )
 import image_gen
+import grokbot_chat
 from messages_api import MessagesApiMixin
 from model_catalogue import DEFAULT_ALIAS, ModelCatalogue, ModelSpec
 from responses_api import ResponsesApiMixin
@@ -52,7 +53,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.6"
+__version__ = "0.3.7"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -770,17 +771,14 @@ class SandBackend:
         )
 
     def session_token(self) -> str:
-        """Return a Cursor *session* JWT for Dashboard / AiService unary RPCs.
+        """Return a Cursor *session* JWT for Dashboard / AiService / GrokBotService.
 
         Preference:
           1. ``SAND_SESSION_TOKEN`` / ``CURSOR_SESSION_TOKEN`` / ``GROKBOT_SESSION_ACCESS_TOKEN``
-             (imported from Grok Bot desktop storage)
-          2. Mint via renewal credential exchange (``sessionToken`` field)
+          2. Cached ``sessionToken`` from the renewal cache
+          3. Mint via renewal credential exchange (``sessionToken`` / type=session)
 
-        Not used by InferenceService/Stream (which needs grokBotToken /
-        ``SAND_INFERENCE_RENEWAL_CREDENTIAL``). The inference token cache stores
-        grokBotToken under ``accessToken`` and is not interchangeable with this
-        session token.
+        Not used by InferenceService/Stream (which needs grokBotToken).
         """
         for env_name in (
             "SAND_SESSION_TOKEN",
@@ -794,13 +792,21 @@ class SandBackend:
         credential = self.module.load_renewal_credential(self.args)
         meta = self.module.client_meta(self.args)
         try:
-            minted = self.module.renew(credential, self.args.backend_url, meta)
+            minted = self.module.get_access_token(self.args, credential, meta)
         except SystemExit as error:
             raise RuntimeError(str(error)) from error
         session = minted.get("sessionToken")
         if isinstance(session, str) and session:
             return session
-        raise RuntimeError("renewal returned no session token for image generation")
+        # Cache may predate sessionToken persistence — force a renew once.
+        try:
+            minted = self.module.get_access_token(self.args, credential, meta, force=True)
+        except SystemExit as error:
+            raise RuntimeError(str(error)) from error
+        session = minted.get("sessionToken")
+        if isinstance(session, str) and session:
+            return session
+        raise RuntimeError("renewal returned no session token for GrokBotService/Dashboard")
 
     def generate_image(
         self,
@@ -875,6 +881,68 @@ class SandBackend:
             return base
         return self.catalogue.resolve(requested)
 
+    def _chat_mode(self) -> str:
+        """agent (default) = GrokBotService; stream = InferenceService/Stream fallback."""
+        mode = (
+            getattr(self.options, "chat_mode", None)
+            or os.environ.get("GROKBOT_CHAT_MODE")
+            or "agent"
+        )
+        return str(mode).strip().lower() or "agent"
+
+    def infer_via_grokbot_service(
+        self,
+        client_model: str,
+        messages: list[Any],
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        spec = self.resolve_model(client_model)
+        meta = self.module.client_meta(self.args)
+        machine_id = self.module.load_machine_id()
+        agent_id = (
+            getattr(self.options, "grokbot_agent_id", None)
+            or os.environ.get("GROKBOT_AGENT_ID")
+            or ""
+        ).strip() or None
+        agent_name = (
+            getattr(self.options, "grokbot_agent_name", None)
+            or os.environ.get("GROKBOT_AGENT_NAME")
+            or grokbot_chat.DEFAULT_AGENT_NAME
+        )
+        with self.lock:
+            session = self.session_token()
+            try:
+                result = grokbot_chat.chat_via_grokbot_service(
+                    session_token=session,
+                    backend_url=self.args.backend_url,
+                    meta=meta,
+                    machine_id=machine_id,
+                    messages=messages,
+                    agent_id=agent_id,
+                    agent_name=str(agent_name),
+                    timeout_ms=int(self.args.timeout_ms),
+                    team_id=str(self.args.team_id) if self.args.team_id else None,
+                )
+            except grokbot_chat.GrokBotChatError as error:
+                result = {
+                    "ok": False,
+                    "httpStatus": error.http_status or 502,
+                    "text": "",
+                    "tool_calls": [],
+                    "error": str(error),
+                    "transport": "GrokBotService/SendGrokBotUserMessage",
+                    "debug": error.payload,
+                }
+        result = dict(result)
+        result["clientModel"] = client_model
+        result["resolvedUpstream"] = spec.upstream_id
+        result["resolvedParams"] = [{"id": k, "value": v} for k, v in spec.params]
+        result["retried"] = False
+        result["retry_reason"] = ""
+        # Keep catalogue model id for OpenAI response.model
+        result["model"] = client_model or spec.alias or result.get("model")
+        return result
+
     def infer_native(
         self,
         client_model: str,
@@ -882,6 +950,11 @@ class SandBackend:
         tools: list[Any],
         request: dict[str, Any],
     ) -> dict[str, Any]:
+        # Official Grok Bot chat uses GrokBotService, not InferenceService/Stream.
+        # Stream still returns ERROR_NOT_HIGH_ENOUGH_PERMISSIONS on SuperGrok+Free.
+        if self._chat_mode() != "stream" and not tools:
+            return self.infer_via_grokbot_service(client_model, messages, request)
+
         with self.lock:
             # Multi-model: map client alias -> upstream model id + params.
             # Startup --model is only used when the client omits model (or as
@@ -2425,6 +2498,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conversation-id", default="")
     parser.add_argument("--client-type", default="sand")
     parser.add_argument("--client-version", default="0.58.0")
+    parser.add_argument(
+        "--chat-mode",
+        default=os.environ.get("GROKBOT_CHAT_MODE", "agent"),
+        choices=("agent", "stream"),
+        help="agent=GrokBotService (official UI path, default); stream=InferenceService/Stream fallback",
+    )
+    parser.add_argument(
+        "--grokbot-agent-id",
+        default=os.environ.get("GROKBOT_AGENT_ID", ""),
+        help="pin GrokBotService agent UUID (default: find/create name grokbot2api)",
+    )
+    parser.add_argument(
+        "--grokbot-agent-name",
+        default=os.environ.get("GROKBOT_AGENT_NAME", "grokbot2api"),
+        help="GrokBotService agent display name used when --grokbot-agent-id is empty",
+    )
     parser.add_argument("--client-source", default=os.environ.get("SAND_CLIENT_SOURCE") or "sand-desktop")
     parser.add_argument("--client-os", default=os.environ.get("SAND_CLIENT_OS") or "")
     parser.add_argument("--namespace", default="prod")

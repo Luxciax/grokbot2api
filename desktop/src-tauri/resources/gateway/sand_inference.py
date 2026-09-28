@@ -331,12 +331,21 @@ def read_cache(path: Path) -> dict | None:
         return None
 
 
-def write_cache(path: Path, access_token: str, expires_at_ms: int, conversation_id: str | None = None) -> None:
+def write_cache(
+    path: Path,
+    access_token: str,
+    expires_at_ms: int,
+    conversation_id: str | None = None,
+    session_token: str | None = None,
+) -> None:
     payload: dict = {"accessToken": access_token, "expiresAtMs": expires_at_ms}
     prev = read_cache(path) or {}
     cid = conversation_id or prev.get("conversationId")
     if isinstance(cid, str) and cid:
         payload["conversationId"] = cid
+    session = session_token if isinstance(session_token, str) and session_token else prev.get("sessionToken")
+    if isinstance(session, str) and session:
+        payload["sessionToken"] = session
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     if hasattr(os, "O_NOFOLLOW"):
@@ -491,13 +500,23 @@ def fetch_sand_usage(
 def get_access_token(args, credential: str, meta: dict[str, str], force: bool = False) -> dict:
     cached = None if force else read_cache(args.cache)
     if cached and cache_valid(cached):
-        return {
+        out = {
             "accessToken": cached["accessToken"],
             "expiresAtMs": int(cached["expiresAtMs"]),
             "renewed": False,
         }
+        session = cached.get("sessionToken")
+        if isinstance(session, str) and session:
+            out["sessionToken"] = session
+        return out
     got = renew(credential, args.backend_url, meta)
-    write_cache(args.cache, got["accessToken"], got["expiresAtMs"], args.conversation_id)
+    write_cache(
+        args.cache,
+        got["accessToken"],
+        got["expiresAtMs"],
+        args.conversation_id,
+        session_token=got.get("sessionToken"),
+    )
     return got
 
 

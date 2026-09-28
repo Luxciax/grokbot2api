@@ -73,7 +73,7 @@ class HealthFingerprintUnitTests(unittest.TestCase):
     def test_version_bumped(self):
         import grokbot2api as bridge
 
-        self.assertEqual(bridge.__version__, "0.3.6")
+        self.assertEqual(bridge.__version__, "0.3.7")
 
 
 if __name__ == "__main__":

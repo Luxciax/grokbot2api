@@ -1,10 +1,18 @@
 # Changelog
 
+## 0.3.7
+
+- Fix: bridge `/v1/chat/completions` through official **GrokBotService** (`SendGrokBotUserMessage` + transcript poll) using the session JWT — same path as Grok Bot 0.58 desktop. `InferenceService/Stream` remains via `GROKBOT_CHAT_MODE=stream` but still returns `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` on SuperGrok + Cursor Free.
+- Fix: persist renewal `sessionToken` in the token cache (needed by GrokBotService / Dashboard / image gen).
+- Note: GrokBotService selects model inside the sand agent (not per OpenAI `model`); client model id is echoed. Pin with `GROKBOT_AGENT_ID` or auto find/create name `grokbot2api`.
+- Add: `grokbot_chat.py`; CLI `--chat-mode agent|stream`, `--grokbot-agent-id`, `--grokbot-agent-name`.
+
 ## 0.3.6
 
 - Align client headers with Grok Bot 0.58: version `0.58.0`, `x-cursor-client-source: sand-desktop`, `x-cursor-client-os: CLIENT_OS_*`.
-- Catalogue: prefer packed upstream ids (`grok-4.7-high`, `…-high-fast`, `composer-2.5`) and set RequestedModel field 8 (`is_variant_string_representation`) when params are empty; correct built_in/variant field numbers (7/8).
-- Improve `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` message: do not blame expired credentials; note official chat uses `SendGrokBotUserMessage` while this proxy uses `InferenceService/Stream`, which stays denied on some SuperGrok+Cursor Free accounts (`noUsageBasedAllowed=true`) even after header/model packing.
+- Catalogue: prefer packed upstream ids (`grok-4.7-high`, `*-high-fast`, `composer-2.5`) and set RequestedModel field 8 (`is_variant_string_representation`) when params are empty; correct built_in/variant field numbers (7/8).
+- Improve `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` message: do not blame expired credentials; note official chat uses `SendGrokBotUserMessage` while Stream stays denied on some SuperGrok+Cursor Free accounts (`noUsageBasedAllowed=true`) even after header/model packing.
+
 ## 0.3.5
 
 - Fix: workbench/admin never displays `[object Object]` — shared `formatErr` extracts `error.message` / JSON.
