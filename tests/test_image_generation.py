@@ -360,6 +360,7 @@ class SandBackendImageUnitTests(unittest.TestCase):
                 backend_url="https://example.test",
                 max_mode=False,
                 timeout_ms=30000,
+                credential="cred",
             )
             backend.media_store = image_gen.MediaStore(Path(tmp))
             backend.module = SimpleNamespace(
