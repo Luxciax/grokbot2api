@@ -68,6 +68,8 @@ class ModelCatalogueTests(unittest.TestCase):
     def test_builtin_aliases_cover_requested_pool(self):
         aliases = {m.alias for m in model_catalogue.BUILTIN_MODELS}
         for needed in {
+            "cursor-grok-4-7",
+            "cursor-grok-4-7-fast",
             "cursor-grok-4-6",
             "cursor-grok-4-6-fast",
             "cursor-grok-4-5",
@@ -85,6 +87,22 @@ class ModelCatalogueTests(unittest.TestCase):
         self.assertEqual(spec.upstream_id, "grok-4.6")
         self.assertIn(("fast", "true"), spec.params)
 
+    def test_resolve_grok_4_7_and_fast(self):
+        catalogue = model_catalogue.ModelCatalogue(
+            config_path=Path("/tmp/grokbot2api-test-admin-unused-47.json")
+        )
+        self.assertEqual(model_catalogue.DEFAULT_ALIAS, "cursor-grok-4-7")
+        std = catalogue.resolve("cursor-grok-4-7")
+        self.assertEqual(std.upstream_id, "grok-4.7")
+        self.assertIn(("fast", "false"), std.params)
+        self.assertTrue(std.supports_vision)
+        fast = catalogue.resolve("cursor-grok-4-7-fast")
+        self.assertEqual(fast.upstream_id, "grok-4.7")
+        self.assertIn(("fast", "true"), fast.params)
+        bare = catalogue.resolve("grok-4.7")
+        self.assertEqual(bare.upstream_id, "grok-4.7")
+        self.assertEqual(catalogue.default_alias, "cursor-grok-4-7")
+
     def test_resolve_composer(self):
         catalogue = model_catalogue.ModelCatalogue(
             config_path=Path("/tmp/grokbot2api-test-admin-unused.json")
@@ -98,7 +116,7 @@ class ModelRoutingTests(unittest.TestCase):
     def test_client_alias_selects_mapped_upstream(self):
         backend = bridge.SandBackend.__new__(bridge.SandBackend)
         backend.options = SimpleNamespace(model="grok-4.6")
-        backend.args = SimpleNamespace(model="")
+        backend.args = SimpleNamespace(model="", credential="credential")
         backend.lock = threading.Lock()
         backend.catalogue = model_catalogue.ModelCatalogue(
             config_path=Path("/tmp/grokbot2api-test-admin-unused2.json"),
@@ -128,7 +146,7 @@ class ModelRoutingTests(unittest.TestCase):
     def test_omitted_model_uses_startup_upstream(self):
         backend = bridge.SandBackend.__new__(bridge.SandBackend)
         backend.options = SimpleNamespace(model="grok-4.6")
-        backend.args = SimpleNamespace(model="")
+        backend.args = SimpleNamespace(model="", credential="credential")
         backend.lock = threading.Lock()
         backend.catalogue = model_catalogue.ModelCatalogue(
             default_alias="cursor-grok-4-5",
@@ -181,12 +199,15 @@ class ModelsAndAdminHttpTests(unittest.TestCase):
             payload = json.load(response)
         ids = {item["id"] for item in payload["data"]}
         for needed in {
+            "cursor-grok-4-7",
+            "cursor-grok-4-7-fast",
             "cursor-grok-4-6",
             "cursor-grok-4-6-fast",
             "cursor-grok-4-5",
             "cursor-grok-4-5-fast",
             "cursor-composer-2-5",
             "cursor-composer-2-5-fast",
+            "grok-4.7",
         }:
             self.assertIn(needed, ids)
 

@@ -75,6 +75,20 @@ def _spec(
 # Fast variants set model param fast=true; non-fast keep fast=false.
 BUILTIN_MODELS: list[ModelSpec] = [
     _spec(
+        "cursor-grok-4-7",
+        "grok-4.7",
+        fast=False,
+        display_name="Cursor Grok 4.7",
+        notes="Standard speed; effort=high",
+    ),
+    _spec(
+        "cursor-grok-4-7-fast",
+        "grok-4.7",
+        fast=True,
+        display_name="Cursor Grok 4.7 Fast",
+        notes="Fast tier; effort=high",
+    ),
+    _spec(
         "cursor-grok-4-6",
         "grok-4.6",
         fast=False,
@@ -134,8 +148,9 @@ BUILTIN_MODELS: list[ModelSpec] = [
 ]
 
 # Also accept bare upstream IDs and common shorthand so clients can pass
-# grok-4.6 / composer-2.5 directly (routed with default high/fast=false).
+# grok-4.7 / grok-4.6 / composer-2.5 directly (routed with default high/fast=false).
 UPSTREAM_PASSTHROUGH: dict[str, ModelSpec] = {
+    "grok-4.7": _spec("grok-4.7", "grok-4.7", fast=False, display_name="Grok 4.7 (upstream id)"),
     "grok-4.6": _spec("grok-4.6", "grok-4.6", fast=False, display_name="Grok 4.6 (upstream id)"),
     "grok-4.5": _spec("grok-4.5", "grok-4.5", fast=False, display_name="Grok 4.5 (upstream id)"),
     "composer-2.5": _spec(
@@ -148,7 +163,7 @@ UPSTREAM_PASSTHROUGH: dict[str, ModelSpec] = {
 }
 
 
-DEFAULT_ALIAS = "cursor-grok-4-6"
+DEFAULT_ALIAS = "cursor-grok-4-7"
 
 
 class ModelCatalogue:
@@ -159,7 +174,7 @@ class ModelCatalogue:
         *,
         default_alias: str = DEFAULT_ALIAS,
         config_path: Path | None = None,
-        fallback_upstream: str = "grok-4.6",
+        fallback_upstream: str = "grok-4.7",
     ) -> None:
         self.lock = threading.Lock()
         self.config_path = Path(config_path) if config_path else DEFAULT_ADMIN_CONFIG

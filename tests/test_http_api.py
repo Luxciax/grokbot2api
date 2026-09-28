@@ -105,6 +105,7 @@ class HttpApiTests(unittest.TestCase):
         with urllib.request.urlopen(self.base_url + "/v1/models", timeout=3) as response:
             payload = json.load(response)
         ids = {item["id"] for item in payload["data"]}
+        self.assertIn("cursor-grok-4-7", ids)
         self.assertIn("cursor-grok-4-6", ids)
         self.assertIn("cursor-composer-2-5-fast", ids)
 
@@ -255,6 +256,7 @@ class ApiKeyTests(unittest.TestCase):
         status, body = self.get("/v1/models", "secret-key")
         self.assertEqual(status, 200)
         ids = {item["id"] for item in json.loads(body)["data"]}
+        self.assertIn("cursor-grok-4-7", ids)
         self.assertIn("cursor-grok-4-6", ids)
 
 

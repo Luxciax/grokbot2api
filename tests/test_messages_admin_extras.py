@@ -257,6 +257,7 @@ class ClientKeyAndCorsTests(unittest.TestCase):
     def test_client_key_accepted_via_x_api_key(self):
         status, body, _ = self.get("/v1/models", {"x-api-key": "client-key-abcdef"})
         self.assertEqual(status, 200)
+        self.assertIn("cursor-grok-4-7", body)
         self.assertIn("cursor-grok-4-6", body)
 
     def test_primary_key_still_works(self):

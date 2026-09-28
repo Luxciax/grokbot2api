@@ -40,7 +40,7 @@ class NativeProtocolTests(unittest.TestCase):
 
         backend = bridge.SandBackend.__new__(bridge.SandBackend)
         backend.options = SimpleNamespace(model="grok-4.6")
-        backend.args = SimpleNamespace(model="")
+        backend.args = SimpleNamespace(model="", credential="credential")
         backend.lock = threading.Lock()
         backend.catalogue = model_catalogue.ModelCatalogue(
             config_path=Path("/tmp/grokbot2api-native-admin.json"),

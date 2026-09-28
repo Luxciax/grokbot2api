@@ -922,7 +922,7 @@ class ProxyServer(ThreadingHTTPServer):
         catalogue = getattr(backend, "catalogue", None)
         if catalogue is None:
             catalogue = ModelCatalogue(
-                fallback_upstream=getattr(getattr(backend, "options", None), "model", "grok-4.6")
+                fallback_upstream=getattr(getattr(backend, "options", None), "model", "grok-4.7")
             )
         self.catalogue = catalogue
         self.listen_host = address[0]
@@ -1162,7 +1162,7 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
         <h2>添加自定义别名</h2>
         <div class="form-grid">
           <div><label class="muted">别名</label><input id="cmAlias" type="text" placeholder="my-grok-fast"/></div>
-          <div><label class="muted">上游 ID</label><input id="cmUpstream" type="text" placeholder="grok-4.6"/></div>
+          <div><label class="muted">上游 ID</label><input id="cmUpstream" type="text" placeholder="grok-4.7"/></div>
           <div><label class="muted">显示名</label><input id="cmDisplay" type="text" placeholder="可选"/></div>
           <div><label class="muted">参数（key=value, 逗号分隔）</label><input id="cmParams" type="text" placeholder="effort=high, fast=true"/></div>
           <div><label class="muted">能力</label>
@@ -1331,7 +1331,7 @@ function renderModels(s){
   const imgSel=document.getElementById('pgImgModel');
   const chatModels=models.filter(m=>m.enabled && ((m.capabilities||[]).includes('chat') || !(m.capabilities||[]).includes('image_generation')));
   const imgModels=models.filter(m=>m.enabled && (m.capabilities||[]).includes('image_generation'));
-  chatSel.innerHTML=chatModels.map(m=>`<option value="${esc(m.id)}" ${m.id===s.default_model?'selected':''}>${esc(m.id)}</option>`).join('')||'<option value="cursor-grok-4-6">cursor-grok-4-6</option>';
+  chatSel.innerHTML=chatModels.map(m=>`<option value="${esc(m.id)}" ${m.id===s.default_model?'selected':''}>${esc(m.id)}</option>`).join('')||'<option value="cursor-grok-4-7">cursor-grok-4-7</option>';
   imgSel.innerHTML=imgModels.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="cursor-generate-image">cursor-generate-image</option>';
 }
 function renderKeys(s){
@@ -2212,7 +2212,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=18765)
     parser.add_argument(
         "--model",
-        default="grok-4.6",
+        default="grok-4.7",
         help="upstream model used when the client omits model (fallback)",
     )
     parser.add_argument(

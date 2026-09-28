@@ -30,7 +30,7 @@ It translates Grok Build requests into Cursor's undocumented `aiserver.v1.Infere
 - Linux (gateway) or Windows 10+ (desktop client + gateway)
 - Python 3.10 or newer (when running from source)
 - [Grok Build](https://github.com/xai-org/grok-build) installed
-- Access to Cursor Models pool models such as `grok-4.6`, `grok-4.5`, or `composer-2.5`
+- Access to Cursor Models pool models such as `grok-4.7`, `grok-4.6`, `grok-4.5`, or `composer-2.5`
 - A valid `SAND_INFERENCE_RENEWAL_CREDENTIAL` issued to you
 
 ## Install
@@ -49,7 +49,23 @@ Copy entries from [`config.example.toml`](config.example.toml) into `~/.grok/con
 
 ```toml
 [models]
-default = "cursor-grok-4-6"
+default = "cursor-grok-4-7"
+
+[model.cursor-grok-4-7]
+name = "Cursor Grok 4.7 via grokbot2api"
+model = "cursor-grok-4-7"
+base_url = "http://127.0.0.1:8765/v1"
+api_backend = "responses"
+api_key = "local-only"
+context_window = 256000
+
+[model.cursor-grok-4-7-fast]
+name = "Cursor Grok 4.7 Fast via grokbot2api"
+model = "cursor-grok-4-7-fast"
+base_url = "http://127.0.0.1:8765/v1"
+api_backend = "responses"
+api_key = "local-only"
+context_window = 256000
 
 [model.cursor-grok-4-6]
 name = "Cursor Grok 4.6 via grokbot2api"
@@ -100,20 +116,23 @@ api_key = "local-only"
 context_window = 256000
 ```
 
-Keep custom `model` values distinct from built-in IDs such as `grok-4.6`. Otherwise Grok Build can merge the custom endpoint with cached built-in metadata.
+Keep custom `model` values distinct from built-in IDs such as `grok-4.7`. Otherwise Grok Build can merge the custom endpoint with cached built-in metadata.
 
 ### Client alias → upstream mapping
 
 | Client alias | Upstream `model_id` | Params |
 |---|---|---|
+| `cursor-grok-4-7` | `grok-4.7` | `effort=high`, `fast=false` |
+| `cursor-grok-4-7-fast` | `grok-4.7` | `effort=high`, `fast=true` |
 | `cursor-grok-4-6` | `grok-4.6` | `effort=high`, `fast=false` |
 | `cursor-grok-4-6-fast` | `grok-4.6` | `effort=high`, `fast=true` |
 | `cursor-grok-4-5` | `grok-4.5` | `effort=high`, `fast=false` |
 | `cursor-grok-4-5-fast` | `grok-4.5` | `effort=high`, `fast=true` |
 | `cursor-composer-2-5` | `composer-2.5` | `fast=false` |
 | `cursor-composer-2-5-fast` | `composer-2.5` | `fast=true` |
+| `cursor-generate-image` | `cursor-generate-image` | AiService/RunGenerateImage (session token) |
 
-Bare upstream ids (`grok-4.6`, `grok-4.5`, `composer-2.5`) are also accepted. When the client omits `model`, the process `--model` value is used as the upstream id.
+Bare upstream ids (`grok-4.7`, `grok-4.6`, `grok-4.5`, `composer-2.5`) are also accepted. When the client omits `model`, the process `--model` value is used as the upstream id (default `grok-4.7`).
 
 Verify that Grok Build sees the models:
 
@@ -141,7 +160,7 @@ Expected output:
 ```text
 grokbot2api listening on http://127.0.0.1:8765/v1
 admin: http://127.0.0.1:8765/admin
-default alias: cursor-grok-4-6; fallback upstream: grok-4.6; models: …; upstream: …/sand_inference.py
+default alias: cursor-grok-4-7; fallback upstream: grok-4.7; models: …; upstream: …/sand_inference.py
 ```
 
 Check the local endpoint:
@@ -179,7 +198,7 @@ Toggles, client keys, and custom model aliases persist to `admin_config.json` ne
 
 ```bash
 cd /path/to/your/project
-grok -m cursor-grok-4-6
+grok -m cursor-grok-4-7
 # or
 grok -m cursor-composer-2-5-fast
 ```
@@ -187,7 +206,7 @@ grok -m cursor-composer-2-5-fast
 Headless example:
 
 ```bash
-grok -m cursor-grok-4-6 -p "Inspect this project and explain how it works."
+grok -m cursor-grok-4-7 -p "Inspect this project and explain how it works."
 ```
 
 ## Vision / images
@@ -236,7 +255,7 @@ server-side (Google image model).
 ```text
 --listen ADDRESS          Listen address (default: 127.0.0.1)
 --port PORT               Listen port (default: 8765)
---model MODEL             Fallback upstream model when client omits model (default: grok-4.6)
+--model MODEL             Fallback upstream model when client omits model (default: grok-4.7)
 --default-alias ALIAS     Default client-facing catalogue alias
 --admin-config PATH       Persisted admin toggles JSON
 --upstream-script PATH    Path to sand_inference.py
@@ -285,7 +304,7 @@ curl -s http://127.0.0.1:8765/v1/messages \
   -H 'content-type: application/json' \
   -H 'x-api-key: YOUR_KEY' \
   -H 'anthropic-version: 2023-06-01' \
-  -d '{"model":"cursor-grok-4-6","max_tokens":512,"messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"cursor-grok-4-7","max_tokens":512,"messages":[{"role":"user","content":"hi"}]}'
 ```
 
 Streaming uses Anthropic SSE (`message_start` / `content_block_*` / `message_delta` / `message_stop`). Tool use / tool result blocks are mapped to the OpenAI tool-call path used by the sand backend. `/messages` is an alias of `/v1/messages`.

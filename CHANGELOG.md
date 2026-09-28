@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+- Add Grok 4.7 catalogue aliases: `cursor-grok-4-7` / `cursor-grok-4-7-fast` (upstream `grok-4.7`, effort=high, fast false/true) plus bare `grok-4.7` passthrough.
+- Change default alias to `cursor-grok-4-7` and fallback upstream to `grok-4.7`.
+- Docs/config: README table, `config.example.toml`, and protocol notes updated for 4.7; keep 4.6 / 4.5 / Composer 2.5.
+- Research note: image gen remains `AiService/RunGenerateImage` (`cursor-generate-image`); no new selectable image model id; no video-generation RPC in Grok Bot / AiService.
+
 ## 0.3.3
 
 - Fix: gateway starts without `SAND_INFERENCE_RENEWAL_CREDENTIAL` / sbi_ — `/health` and `/admin` work; inference fails later with a clear error.

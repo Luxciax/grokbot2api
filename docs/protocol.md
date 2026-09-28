@@ -125,14 +125,14 @@ message InferenceModelParameterValue {
 }
 ```
 
-Client-facing aliases (for example `cursor-grok-4-6-fast`) map to an upstream `model_id` plus parameter list. Typical Grok params:
+Client-facing aliases (for example `cursor-grok-4-7-fast`) map to an upstream `model_id` plus parameter list. Typical Grok params:
 
 ```text
 effort=high
 fast=true|false
 ```
 
-Composer aliases omit `effort` and only set `fast`. When the client omits `model`, the proxy uses the process `--model` upstream id (default `grok-4.6`).
+Composer aliases omit `effort` and only set `fast`. When the client omits `model`, the proxy uses the process `--model` upstream id (default `grok-4.7`). Grok 4.7 uses upstream id `grok-4.7` with the same `effort` / `fast` params as 4.6.
 
 ### Message roles
 
@@ -426,8 +426,8 @@ protobuf request; the difference is limited to the local request and response
 representation.
 
 The request's model ID is preserved in the local response. Inference is routed
-through the local model catalogue: client aliases such as `cursor-grok-4-6`
-map to upstream ids (`grok-4.6`) and model params (`effort` / `fast`). The
+through the local model catalogue: client aliases such as `cursor-grok-4-7`
+map to upstream ids (`grok-4.7`) and model params (`effort` / `fast`). The
 proxy `--model` flag is only the fallback when the client omits `model`.
 Keeping client aliases distinct from built-in Grok Build ids avoids merging
 custom endpoints with built-in context-window metadata.
@@ -558,6 +558,8 @@ Connect unary JSON (`Content-Type: application/json`, camelCase) is the default 
 
 - `POST /v1/images/generations` (alias `/images/generations`) — OpenAI Images shape
 - Catalogue alias `cursor-generate-image` with capability `image_generation`
+- No separate selectable image model catalogue entries: `model_id` on RunGenerateImage is optional and often ignored server-side (Google/Nano Banana backend).
+- No video-generation RPC (`GenerateVideo` / `RunGenerateVideo`) in AiService; do not invent a video OpenAI bridge without a wire path.
 - Saved blobs under `media/` with `index.json`; served at `GET /media/<id>` (API-key auth when configured)
 
 OpenAI `size` values are mapped to the closest supported aspect ratio (e.g. `1024x1024` → `1:1`,
