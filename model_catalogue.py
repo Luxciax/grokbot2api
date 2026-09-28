@@ -395,14 +395,16 @@ class ModelCatalogue:
             return [item["key"] for item in self.client_keys]
 
     def add_client_key(self, key: str, name: str = "") -> dict[str, Any]:
+        import secrets
         import time
         import uuid
 
         key = (key or "").strip()
         if not key:
-            raise ValueError("key must be non-empty")
+            # Auto-generate when the admin UI leaves the field empty.
+            key = "gb_" + secrets.token_urlsafe(24)
         if len(key) < 8:
-            raise ValueError("key must be at least 8 characters")
+            raise ValueError("密钥长度至少 8 个字符（可留空以自动生成）")
         with self.lock:
             for existing in self.client_keys:
                 if existing["key"] == key:

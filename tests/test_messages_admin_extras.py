@@ -332,5 +332,21 @@ class CatalogueClientKeyPersistenceTests(unittest.TestCase):
             self.assertEqual(cat3.list_client_key_values(), [])
 
 
+    def test_add_client_key_autogenerates_when_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "admin_config.json"
+            cat = model_catalogue.ModelCatalogue(config_path=path)
+            entry = cat.add_client_key("", name="auto")
+            self.assertTrue(entry["key"].startswith("gb_"))
+            self.assertGreaterEqual(len(entry["key"]), 8)
+            self.assertEqual(cat.list_client_key_values(), [entry["key"]])
+
+    def test_add_client_key_rejects_short(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cat = model_catalogue.ModelCatalogue(config_path=Path(tmp) / "admin_config.json")
+            with self.assertRaises(ValueError):
+                cat.add_client_key("short")
+
+
 if __name__ == "__main__":
     unittest.main()

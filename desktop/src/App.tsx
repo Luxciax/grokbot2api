@@ -10,6 +10,24 @@ import type {
 import { APP_VERSION, NAV_ITEMS } from "./types";
 import "./App.css";
 
+/** Flatten Tauri/JS errors so UI never shows [object Object]. */
+function formatErr(err: unknown): string {
+  if (err == null) return "";
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message || String(err);
+  if (typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    if (typeof o.message === "string" && o.message) return o.message;
+    if (o.error != null) return formatErr(o.error);
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return Object.prototype.toString.call(err);
+    }
+  }
+  return String(err);
+}
+
 export default function App() {
   const [nav, setNav] = useState<NavId>("workbench");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -46,7 +64,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      setError(String(e));
+      setError(formatErr(e));
     }
   }, []);
 
@@ -75,7 +93,7 @@ export default function App() {
     try {
       await fn();
     } catch (e) {
-      setError(String(e));
+      setError(formatErr(e));
     } finally {
       setBusy(false);
       await refresh();

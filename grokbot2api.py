@@ -51,10 +51,42 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
+
+def coerce_error_message(value: Any) -> str:
+    """Flatten nested upstream / OpenAI-style error payloads into a single string."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("message", "detail", "title", "error", "msg"):
+            inner = value.get(key)
+            if isinstance(inner, str) and inner.strip():
+                return inner.strip()
+            if isinstance(inner, dict):
+                nested = coerce_error_message(inner)
+                if nested:
+                    return nested
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return str(value)
+    if isinstance(value, (list, tuple)):
+        parts = [coerce_error_message(item) for item in value]
+        return "; ".join(part for part in parts if part) or str(value)
+    return str(value)
+
+
+def api_error_payload(message: Any, err_type: str = "invalid_request_error", **extra: Any) -> dict[str, Any]:
+    """OpenAI-shaped error object plus a flat string message for stubborn clients."""
+    text_msg = coerce_error_message(message) or "unknown error"
+    error: dict[str, Any] = {"message": text_msg, "type": err_type}
+    error.update(extra)
+    return {"error": error, "message": text_msg}
 
 
 def load_upstream(path: Path) -> ModuleType:
@@ -1063,15 +1095,29 @@ p{color:#9aa;font-size:.9rem}
 </style></head><body><card>
 <h1>grokbot2api 管理后台</h1>
 <p>需要与代理相同的 API Key（Bearer）。未配置密钥时可直接打开 <code>/admin</code>。</p>
-<input id="key" type="password" placeholder="API Key"/>
+<input id="key" type="password" placeholder="API Key（主密钥或客户端密钥）"/>
 <button onclick="login()">登录</button>
 <p id="err" style="color:#f87171"></p>
 <script>
+function formatErr(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='string') return v;
+  if(v instanceof Error) return v.message||String(v);
+  if(typeof v==='object'){
+    if(typeof v.message==='string'&&v.message) return v.message;
+    if(v.error!=null) return formatErr(v.error);
+    try{return JSON.stringify(v);}catch(e){return String(v);}
+  }
+  return String(v);
+}
 async function login(){
   const api_key=document.getElementById('key').value;
   const r=await fetch('/admin/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key})});
-  if(!r.ok){document.getElementById('err').textContent='登录失败';return;}
-  localStorage.setItem('grokbot2api_key', api_key);
+  let data={};
+  try{data=await r.json();}catch(e){}
+  if(!r.ok){document.getElementById('err').textContent=formatErr(data)||('登录失败 HTTP '+r.status);return;}
+  const store=api_key||(data.key||'');
+  if(store) localStorage.setItem('grokbot2api_key', store);
   location.href='/admin';
 }
 </script></card></body></html>
@@ -1182,7 +1228,7 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
         <h2>客户端 API Keys</h2>
         <p class="muted">任意已登记密钥或主环境变量密钥均可鉴权。界面永不展示完整主密钥或沙箱凭证。</p>
         <div class="row" style="margin-bottom:.8rem">
-          <input id="newKey" type="text" placeholder="新密钥（≥8 字符）" style="flex:1;min-width:180px"/>
+          <input id="newKey" type="text" placeholder="新密钥（可留空自动生成，≥8 字符）" style="flex:1;min-width:180px"/>
           <input id="newKeyName" type="text" placeholder="备注名（可选）" style="flex:1;min-width:120px"/>
           <button onclick="createKey()">创建</button>
         </div>
@@ -1257,7 +1303,19 @@ const TITLES={overview:'总览',models:'模型',keys:'密钥',audits:'审计',me
 let STATE=null;
 const key=()=>localStorage.getItem('grokbot2api_key')||'';
 function authHeaders(extra){const h=Object.assign({'Content-Type':'application/json'},extra||{}); const k=key(); if(k) h['Authorization']='Bearer '+k; return h;}
-function logout(){localStorage.removeItem('grokbot2api_key'); location.href='/admin';}
+function formatErr(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='string') return v;
+  if(v instanceof Error) return v.message||String(v);
+  if(typeof v==='object'){
+    if(typeof v.message==='string'&&v.message) return v.message;
+    if(v.error!=null) return formatErr(v.error);
+    try{return JSON.stringify(v);}catch(e){return Object.prototype.toString.call(v);}
+  }
+  return String(v);
+}
+async function readJsonSafe(r){try{return await r.json();}catch(e){return {message:'HTTP '+r.status+'（响应非 JSON）'};}}
+function logout(){localStorage.removeItem('grokbot2api_key'); location.href='/admin/login';}
 function pct(n){return ((n||0)*100).toFixed(1)+'%';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function showSec(id, syncHash){
@@ -1372,7 +1430,7 @@ function render(s){
 }
 async function refreshAll(){
   const r=await fetch('/admin/api/status',{headers:authHeaders()});
-  if(r.status===401){location.href='/admin';return;}
+  if(r.status===401){location.href='/admin/login';return;}
   const s=await r.json(); render(s);
   const active=document.querySelector('main.active');
   if(active && active.id==='media') loadMedia();
@@ -1412,21 +1470,34 @@ async function addCustomModel(){
   };
   const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
   const data=await r.json();
-  document.getElementById('msg').textContent=r.ok?'自定义别名已添加':('失败: '+(data.error&&data.error.message||''));
+  document.getElementById('msg').textContent=r.ok?'自定义别名已添加':('失败: '+formatErr(data));
   if(r.ok){['cmAlias','cmUpstream','cmDisplay','cmParams'].forEach(id=>document.getElementById(id).value=''); render(data);}
 }
 async function createKey(){
   const keyVal=document.getElementById('newKey').value;
   const name=document.getElementById('newKeyName').value;
   const r=await fetch('/admin/api/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'create',key:keyVal,name})});
-  const body=await r.json();
-  document.getElementById('msg').textContent=r.ok?'密钥已创建':'创建失败: '+(body.error&&body.error.message||'');
-  if(r.ok){document.getElementById('newKey').value=''; document.getElementById('newKeyName').value=''; refreshAll();}
+  const body=await readJsonSafe(r);
+  if(!r.ok){
+    const detail=formatErr(body)||('HTTP '+r.status);
+    document.getElementById('msg').textContent=r.status===401
+      ? ('创建失败: 需要登录（'+detail+'）。请先到登录页填写主密钥或已有客户端密钥。')
+      : ('创建失败: '+detail);
+    if(r.status===401){setTimeout(()=>location.href='/admin/login',800);}
+    return;
+  }
+  const created=(body.key&&body.key.key)||'';
+  if(created && !key()) localStorage.setItem('grokbot2api_key', created);
+  document.getElementById('msg').textContent=created
+    ? ('密钥已创建：'+created+'（请妥善保存；已写入本页鉴权）')
+    : '密钥已创建';
+  document.getElementById('newKey').value=''; document.getElementById('newKeyName').value='';
+  if(body.status) render(body.status); else refreshAll();
 }
 async function revokeKey(id){
   if(!confirm('确认吊销该密钥？')) return;
   const r=await fetch('/admin/api/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'revoke',id})});
-  document.getElementById('msg').textContent=r.ok?'已吊销':'吊销失败';
+  document.getElementById('msg').textContent=r.ok?'已吊销':('吊销失败: '+formatErr(await readJsonSafe(r)));
   if(r.ok) refreshAll();
 }
 async function exportAudits(){
@@ -1440,7 +1511,7 @@ async function loadMedia(){
   const box=document.getElementById('mediaGallery');
   box.innerHTML='<div class="muted">加载中…</div>';
   const r=await fetch('/admin/api/media',{headers:authHeaders()});
-  if(r.status===401){location.href='/admin';return;}
+  if(r.status===401){location.href='/admin/login';return;}
   if(!r.ok){box.innerHTML='<div class="bad">加载失败</div>';return;}
   const data=await r.json();
   const items=data.items||[];
@@ -1467,11 +1538,11 @@ async function runChat(){
   const payload={model:document.getElementById('pgChatModel').value, messages:[{role:'user',content:document.getElementById('pgChatPrompt').value||'hi'}], stream:false};
   try{
     const r=await fetch('/v1/chat/completions',{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
-    const data=await r.json();
-    if(!r.ok){out.textContent='错误 '+r.status+': '+JSON.stringify(data,null,2);return;}
+    const data=await readJsonSafe(r);
+    if(!r.ok){out.textContent='错误 '+r.status+': '+formatErr(data);return;}
     const text=(((data.choices||[])[0]||{}).message||{}).content||JSON.stringify(data,null,2);
     out.textContent=text;
-  }catch(e){out.textContent=String(e);}
+  }catch(e){out.textContent=formatErr(e);}
 }
 async function runImage(){
   const out=document.getElementById('pgImgOut');
@@ -1532,7 +1603,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError) as exc:
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
             raise ClientDisconnected from exc
 
     def _presented_api_key(self) -> str:
@@ -1568,7 +1639,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(body)
-        except (BrokenPipeError, ConnectionResetError) as exc:
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
             raise ClientDisconnected from exc
 
     def do_OPTIONS(self) -> None:
@@ -1608,16 +1679,18 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
         if path in {"/docs"}:
             self.send_html(200, render_docs_html(self.server))
             return
-        # Every other route describes the account (model catalogue, allowance), so it carries the
-        # same Bearer token as inference. Only the health probe and docs stay open.
-        if not self.authorized():
-            if path in {"/admin", "/dashboard"}:
-                self.send_html(401, ADMIN_LOGIN_HTML)
-                return
-            self.send_json(401, {"error": {"message": "invalid API key", "type": "authentication_error"}})
+        # Admin HTML shell is public so Tauri iframe / localStorage Bearer auth works
+        # without relying on HttpOnly cookies (often blocked as third-party in WebView).
+        if path in {"/admin/login", "/dashboard/login"}:
+            self.send_html(200, ADMIN_LOGIN_HTML)
             return
         if path in {"/admin", "/dashboard"}:
             self.send_html(200, render_admin_html(self.server))
+            return
+        # Every other route describes the account (model catalogue, allowance), so it carries the
+        # same Bearer token as inference. Only the health probe, docs, and admin HTML stay open.
+        if not self.authorized():
+            self.send_json(401, api_error_payload("无效的 API Key，请先登录或在请求头携带 Bearer / x-api-key", "authentication_error"))
             return
         if path in {"/admin/api/status", "/dashboard/api/status"}:
             self.send_json(200, admin_status_payload(self.server))
@@ -1668,13 +1741,13 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
         if path.startswith("/media/"):
             media_id = path[len("/media/") :].strip("/")
             if not media_id or "/" in media_id or ".." in media_id:
-                self.send_json(404, {"error": {"message": "not found", "type": "invalid_request_error"}})
+                self.send_json(404, api_error_payload("not found", "invalid_request_error"))
                 return
             store = getattr(self.server, "media_store", None) or image_gen.MediaStore()
             item = store.get(media_id)
             file_path = store.resolve_path(media_id)
             if not item or file_path is None:
-                self.send_json(404, {"error": {"message": "media not found", "type": "invalid_request_error"}})
+                self.send_json(404, api_error_payload("media not found", "invalid_request_error"))
                 return
             raw = file_path.read_bytes()
             mime = str(item.get("mime_type") or "application/octet-stream")
@@ -1710,30 +1783,30 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
                 },
             )
             return
-        self.send_json(404, {"error": {"message": "not found", "type": "invalid_request_error"}})
+        self.send_json(404, api_error_payload("not found", "invalid_request_error"))
 
     def do_DELETE(self) -> None:
         path = self.path.split("?", 1)[0].rstrip("/") or "/"
         if not self.authorized():
-            self.send_json(401, {"error": {"message": "invalid API key", "type": "authentication_error"}})
+            self.send_json(401, api_error_payload("无效的 API Key，请先登录或在请求头携带 Bearer / x-api-key", "authentication_error"))
             return
         prefixes = ("/admin/api/media/", "/dashboard/api/media/")
         matched = next((prefix for prefix in prefixes if path.startswith(prefix)), "")
         if not matched:
-            self.send_json(404, {"error": {"message": "not found", "type": "invalid_request_error"}})
+            self.send_json(404, api_error_payload("not found", "invalid_request_error"))
             return
         media_id = path[len(matched) :].strip("/")
         if not media_id or "/" in media_id or ".." in media_id:
-            self.send_json(400, {"error": {"message": "invalid media id", "type": "invalid_request_error"}})
+            self.send_json(400, api_error_payload("invalid media id", "invalid_request_error"))
             return
         store = getattr(self.server, "media_store", None) or image_gen.MediaStore()
         try:
             store.delete(media_id)
         except KeyError:
-            self.send_json(404, {"error": {"message": "media not found", "type": "invalid_request_error"}})
+            self.send_json(404, api_error_payload("media not found", "invalid_request_error"))
             return
         except ValueError as exc:
-            self.send_json(400, {"error": {"message": str(exc), "type": "invalid_request_error"}})
+            self.send_json(400, api_error_payload(str(exc), "invalid_request_error"))
             return
         self.send_json(200, {"ok": True, "deleted": media_id, "media_count": len(store.list_items(limit=1000))})
 
@@ -1744,7 +1817,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             self.handle_admin_login()
             return
         if not self.authorized():
-            self.send_json(401, {"error": {"message": "invalid API key", "type": "authentication_error"}})
+            self.send_json(401, api_error_payload("无效的 API Key，请先登录或在请求头携带 Bearer / x-api-key", "authentication_error"))
             return
         if path in {"/admin/api/models", "/dashboard/api/models"}:
             self.handle_admin_models_update()
@@ -1759,15 +1832,11 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
         if not chat_path and not responses_path and not messages_path and not images_path:
             self.send_json(
                 404,
-                {
-                    "error": {
-                        "message": (
-                            "supported: /v1/chat/completions, /v1/responses, "
-                            "/v1/messages, /v1/images/generations"
-                        ),
-                        "type": "invalid_request_error",
-                    }
-                },
+                api_error_payload(
+                    "supported: /v1/chat/completions, /v1/responses, "
+                    "/v1/messages, /v1/images/generations",
+                    "invalid_request_error",
+                ),
             )
             return
         if images_path:
@@ -1793,7 +1862,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             except ValueError as exc:
                 self.server.stats.record(route, model_for_stats, ok=False, error=str(exc))
                 self.server.audit.record(path=route, model=model_for_stats, status=400, error=str(exc))
-                self.send_json(400, {"error": {"message": str(exc), "type": "invalid_request_error"}})
+                self.send_json(400, api_error_payload(str(exc), "invalid_request_error"))
             except image_gen.ImageGenError as exc:
                 self.server.stats.record(route, model_for_stats, ok=False, error=str(exc))
                 status = 502 if not exc.http_status or exc.http_status == 200 else min(exc.http_status, 599)
@@ -1802,19 +1871,17 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
                 self.server.audit.record(path=route, model=model_for_stats, status=status, error=str(exc))
                 self.send_json(
                     status,
-                    {
-                        "error": {
-                            "message": str(exc),
-                            "type": "upstream_error",
-                            "model_restricted": exc.model_restricted,
-                            "content_safety_blocked": exc.content_safety_blocked,
-                        }
-                    },
+                    api_error_payload(
+                        str(exc),
+                        "upstream_error",
+                        model_restricted=exc.model_restricted,
+                        content_safety_blocked=exc.content_safety_blocked,
+                    ),
                 )
             except Exception as exc:
                 self.server.stats.record(route, model_for_stats, ok=False, error=str(exc))
                 self.server.audit.record(path=route, model=model_for_stats, status=502, error=str(exc))
-                self.send_json(502, {"error": {"message": str(exc), "type": "upstream_error"}})
+                self.send_json(502, api_error_payload(str(exc), "upstream_error"))
             return
         if chat_path:
             route = "/v1/chat/completions"
@@ -1854,7 +1921,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             self.server.stats.record(route, model_for_stats, ok=False, error=str(exc))
             self.server.audit.record(path=route, model=model_for_stats, status=400, error=str(exc))
             try:
-                self.send_json(400, {"error": {"message": str(exc), "type": "invalid_request_error"}})
+                self.send_json(400, api_error_payload(str(exc), "invalid_request_error"))
             except ClientDisconnected:
                 pass
         except ClientDisconnected:
@@ -1864,7 +1931,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             self.server.audit.record(path=route, model=model_for_stats, status=502, error=str(exc))
             traceback.print_exc(file=sys.stderr)
             try:
-                self.send_json(502, {"error": {"message": str(exc), "type": "upstream_error"}})
+                self.send_json(502, api_error_payload(str(exc), "upstream_error"))
             except ClientDisconnected:
                 pass
 
@@ -1874,28 +1941,32 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             raw = self.rfile.read(size) if size > 0 else b"{}"
             payload = json.loads(raw.decode("utf-8") or "{}")
         except Exception:
-            self.send_json(400, {"error": {"message": "invalid JSON"}})
+            self.send_json(400, api_error_payload("请求体不是合法 JSON"))
             return
-        key = str(payload.get("api_key") or payload.get("token") or "")
+        key = str(payload.get("api_key") or payload.get("token") or "").strip()
         accepted = self.server.accepted_api_keys()
         if accepted and key not in accepted:
-            self.send_json(401, {"error": {"message": "invalid API key"}})
+            self.send_json(401, api_error_payload("API Key 无效（需主密钥或已登记的客户端密钥）", "authentication_error"))
             return
         # When no keys configured, accept empty login for loopback admin.
         cookie_value = key if key else (self.server.api_key or "")
-        body = json.dumps({"ok": True}).encode("utf-8")
+        body = json.dumps({"ok": True, "key": cookie_value}, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         if cookie_value:
+            # SameSite=Lax so top-level navigations keep the cookie; workbench primarily uses Bearer from localStorage.
             self.send_header(
                 "Set-Cookie",
-                f"grokbot2api_key={cookie_value}; Path=/; HttpOnly; SameSite=Strict",
+                f"grokbot2api_key={cookie_value}; Path=/; SameSite=Lax",
             )
         self.send_header("Connection", "close")
         self.add_cors_headers()
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
+            raise ClientDisconnected from exc
 
     def handle_admin_models_update(self) -> None:
         try:
@@ -1923,18 +1994,18 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
                     self.server.catalogue.set_enabled(str(alias), bool(enabled))
             self.send_json(200, admin_status_payload(self.server))
         except KeyError as exc:
-            self.send_json(404, {"error": {"message": f"unknown model {exc}"}})
+            self.send_json(404, api_error_payload(f"unknown model {exc}"))
         except (ValueError, json.JSONDecodeError, TypeError) as exc:
-            self.send_json(400, {"error": {"message": str(exc)}})
+            self.send_json(400, api_error_payload(str(exc)))
 
     def handle_admin_keys(self) -> None:
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if size <= 0 or size > MAX_REQUEST_BYTES:
-                raise ValueError("invalid body")
+                raise ValueError("请求体无效")
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
-                raise ValueError("body must be an object")
+                raise ValueError("请求体必须是 JSON 对象")
             action = str(payload.get("action") or "").strip().lower()
             if action in {"create", "add"}:
                 entry = self.server.catalogue.add_client_key(
@@ -1946,15 +2017,15 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
             if action in {"revoke", "delete", "remove"}:
                 key_id = str(payload.get("id") or payload.get("key_id") or "")
                 if not key_id:
-                    raise ValueError("id is required to revoke a key")
+                    raise ValueError("吊销密钥需要提供 id")
                 self.server.catalogue.revoke_client_key(key_id)
                 self.send_json(200, admin_status_payload(self.server))
                 return
-            raise ValueError("action must be create or revoke")
+            raise ValueError("action 必须是 create 或 revoke")
         except KeyError as exc:
-            self.send_json(404, {"error": {"message": f"unknown key {exc}"}})
+            self.send_json(404, api_error_payload(f"未知密钥 {exc}"))
         except (ValueError, json.JSONDecodeError) as exc:
-            self.send_json(400, {"error": {"message": str(exc)}})
+            self.send_json(400, api_error_payload(str(exc)))
 
     def handle_image_generations(self, request: dict[str, Any]) -> None:
         prompt = request.get("prompt") or request.get("description") or ""
@@ -2041,7 +2112,7 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
 
         result, content, calls = self.server.backend.complete(model, request["messages"], tools, request)
         if not result.get("ok"):
-            raise RuntimeError(str(result.get("error") or f"upstream HTTP {result.get('httpStatus')}"))
+            raise RuntimeError(coerce_error_message(result.get("error")) or f"upstream HTTP {result.get('httpStatus')}")
 
         finish_reason = "tool_calls" if calls else "stop"
         usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
@@ -2151,23 +2222,23 @@ class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):
 
         if not succeeded:
             self.log_message("upstream exception during stream: %s", outcome)
-            error = {"error": {"message": str(outcome), "type": "upstream_error"}}
+            error = api_error_payload(outcome, "upstream_error")
             try:
                 self.wfile.write(b"data: " + json.dumps(error, ensure_ascii=False).encode("utf-8") + b"\n\n")
                 self.stream_done()
-            except (BrokenPipeError, ConnectionResetError) as exc:
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
                 raise ClientDisconnected from exc
             return
 
         result, content, calls = outcome
         if not result.get("ok"):
-            message = str(result.get("error") or f"upstream HTTP {result.get('httpStatus')}")
+            message = coerce_error_message(result.get("error")) or f"upstream HTTP {result.get('httpStatus')}"
             self.log_message("upstream error during stream: %s", message)
-            error = {"error": {"message": message, "type": "upstream_error"}}
+            error = api_error_payload(message, "upstream_error")
             try:
                 self.wfile.write(b"data: " + json.dumps(error, ensure_ascii=False).encode("utf-8") + b"\n\n")
                 self.stream_done()
-            except (BrokenPipeError, ConnectionResetError) as exc:
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as exc:
                 raise ClientDisconnected from exc
             return
 

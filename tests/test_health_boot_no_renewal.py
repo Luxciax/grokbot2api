@@ -73,8 +73,29 @@ class HealthFingerprintUnitTests(unittest.TestCase):
     def test_version_bumped(self):
         import grokbot2api as bridge
 
-        self.assertEqual(bridge.__version__, "0.3.4")
+        self.assertEqual(bridge.__version__, "0.3.5")
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApiErrorPayloadTests(unittest.TestCase):
+    def test_api_error_payload_flattens(self):
+        import grokbot2api as bridge
+
+        payload = bridge.api_error_payload(
+            {"code": "permission_denied", "message": "Access denied."},
+            "upstream_error",
+        )
+        self.assertEqual(payload["message"], "Access denied.")
+        self.assertEqual(payload["error"]["message"], "Access denied.")
+        self.assertEqual(payload["error"]["type"], "upstream_error")
+
+    def test_coerce_nested(self):
+        import grokbot2api as bridge
+
+        self.assertEqual(
+            bridge.coerce_error_message({"error": {"message": "nested"}}),
+            "nested",
+        )

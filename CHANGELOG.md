@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.5
+
+- Fix: workbench/admin never displays `[object Object]` — shared `formatErr` extracts `error.message` / JSON.
+- Fix: API error responses include a flat top-level `message` string alongside OpenAI-shaped `error` for stubborn Chinese clients.
+- Fix: upstream dict errors (e.g. permission_denied trailer) coerced to a readable string before SSE/JSON.
+- Fix: creating a client API key with an empty field auto-generates `gb_…`; clearer Chinese validation/auth errors.
+- Fix: after first key create, workbench stores the new key in localStorage so admin APIs keep working; `/admin` HTML no longer depends on HttpOnly cookies (Tauri iframe); login at `/admin/login`.
+- Fix: catch Windows `ConnectionAbortedError` when writing JSON responses.
+
 ## 0.3.4
 
 - Add Grok 4.7 catalogue aliases: `cursor-grok-4-7` / `cursor-grok-4-7-fast` (upstream `grok-4.7`, effort=high, fast false/true) plus bare `grok-4.7` passthrough.

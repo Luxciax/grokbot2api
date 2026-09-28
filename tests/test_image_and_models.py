@@ -234,17 +234,25 @@ class AdminAuthTests(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=2)
 
-    def test_admin_requires_key(self):
+    def test_admin_html_is_public_apis_require_key(self):
+        # Workbench HTML is public so Tauri iframe + localStorage Bearer works;
+        # JSON admin APIs still require auth when keys are configured.
         request = urllib.request.Request(self.base_url + "/admin")
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 200)
+            body = response.read().decode()
+            self.assertIn("formatErr", body)
+
+        status_req = urllib.request.Request(self.base_url + "/admin/api/status")
         try:
-            urllib.request.urlopen(request, timeout=3)
-            self.fail("expected 401")
+            urllib.request.urlopen(status_req, timeout=3)
+            self.fail("expected 401 for /admin/api/status")
         except urllib.error.HTTPError as error:
             self.assertEqual(error.code, 401)
 
     def test_admin_accepts_bearer(self):
         request = urllib.request.Request(
-            self.base_url + "/admin",
+            self.base_url + "/admin/api/status",
             headers={"Authorization": "Bearer secret-key"},
         )
         with urllib.request.urlopen(request, timeout=3) as response:
