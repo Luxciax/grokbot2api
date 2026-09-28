@@ -1,6 +1,6 @@
 [package]
 name = "grokbot2api-desktop"
-version = "0.3.5"
+version = "0.3.6"
 description = "grokbot2api Tauri desktop client — local gateway shell + embedded admin workbench"
 authors = ["Luxciax"]
 edition = "2021"

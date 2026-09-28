@@ -84,8 +84,8 @@ class ModelCatalogueTests(unittest.TestCase):
             config_path=Path("/tmp/grokbot2api-test-admin-unused.json")
         )
         spec = catalogue.resolve("cursor-grok-4-6-fast")
-        self.assertEqual(spec.upstream_id, "grok-4.6")
-        self.assertIn(("fast", "true"), spec.params)
+        self.assertEqual(spec.upstream_id, "cursor-grok-4.6-high-fast")
+        self.assertEqual(spec.params, [])
 
     def test_resolve_grok_4_7_and_fast(self):
         catalogue = model_catalogue.ModelCatalogue(
@@ -93,14 +93,14 @@ class ModelCatalogueTests(unittest.TestCase):
         )
         self.assertEqual(model_catalogue.DEFAULT_ALIAS, "cursor-grok-4-7")
         std = catalogue.resolve("cursor-grok-4-7")
-        self.assertEqual(std.upstream_id, "grok-4.7")
-        self.assertIn(("fast", "false"), std.params)
-        self.assertTrue(std.supports_vision)
+        self.assertEqual(std.upstream_id, "grok-4.7-high")
+        self.assertEqual(std.params, [])
+        self.assertFalse(std.supports_vision)
         fast = catalogue.resolve("cursor-grok-4-7-fast")
-        self.assertEqual(fast.upstream_id, "grok-4.7")
-        self.assertIn(("fast", "true"), fast.params)
+        self.assertEqual(fast.upstream_id, "grok-4.7-high-fast")
+        self.assertEqual(fast.params, [])
         bare = catalogue.resolve("grok-4.7")
-        self.assertEqual(bare.upstream_id, "grok-4.7")
+        self.assertEqual(bare.upstream_id, "grok-4.7-high")
         self.assertEqual(catalogue.default_alias, "cursor-grok-4-7")
 
     def test_resolve_composer(self):
@@ -139,9 +139,9 @@ class ModelRoutingTests(unittest.TestCase):
         with mock.patch.object(bridge, "native_stream_llm", side_effect=fake_native_stream):
             result = backend.infer_native("cursor-grok-4-5-fast", [], [], {})
 
-        self.assertEqual(result["model"], "grok-4.5")
-        self.assertEqual(seen["model"], "grok-4.5")
-        self.assertIn(("fast", "true"), seen["params"])
+        self.assertEqual(result["model"], "cursor-grok-4.5-high-fast")
+        self.assertEqual(seen["model"], "cursor-grok-4.5-high-fast")
+        self.assertEqual(seen["params"], [])
 
     def test_omitted_model_uses_startup_upstream(self):
         backend = bridge.SandBackend.__new__(bridge.SandBackend)

@@ -60,8 +60,8 @@ class NativeProtocolTests(unittest.TestCase):
         with mock.patch.object(bridge, "native_stream_llm", side_effect=fake_native_stream):
             result = backend.infer_native("cursor-grok-4-6", [], [], {})
 
-        self.assertEqual(result["model"], "grok-4.6")
-        self.assertEqual(backend.args.model, "grok-4.6")
+        self.assertEqual(result["model"], "cursor-grok-4.6-high")
+        self.assertEqual(backend.args.model, "cursor-grok-4.6-high")
 
     def test_request_contains_messages_tools_and_requested_model(self):
         messages = [

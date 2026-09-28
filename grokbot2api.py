@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import queue
+import re
 import ssl
 import struct
 import sys
@@ -51,21 +52,43 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
 
 def coerce_error_message(value: Any) -> str:
-    """Flatten nested upstream / OpenAI-style error payloads into a single string."""
+    """Flatten nested upstream / OpenAI-style error payloads into a single string.
+
+    Connect trailers often arrive as a dict (or ``str(dict)`` from an older path)
+    with ``details[].debug.error == ERROR_NOT_HIGH_ENOUGH_PERMISSIONS``. Prefer a
+    short Chinese explanation for that code over the raw nested payload.
+    """
     if value is None:
         return ""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
     if isinstance(value, str):
-        return value
+        text = value.strip()
+        if not text:
+            return ""
+        parsed = _try_parse_embedded_error(text)
+        if parsed is not None:
+            return coerce_error_message(parsed)
+        mapped = _friendly_upstream_code_message(text)
+        return mapped or text
     if isinstance(value, dict):
+        mapped = _friendly_upstream_code_message(_extract_upstream_error_code(value) or "")
+        if mapped:
+            return mapped
         for key in ("message", "detail", "title", "error", "msg"):
             inner = value.get(key)
             if isinstance(inner, str) and inner.strip():
+                # Prefer a code-based friendly string when the human message is generic.
+                nested_code = _extract_upstream_error_code(value)
+                mapped = _friendly_upstream_code_message(nested_code or "")
+                if mapped and inner.strip().lower() in {"access denied.", "access denied", "permission denied"}:
+                    return mapped
                 return inner.strip()
             if isinstance(inner, dict):
                 nested = coerce_error_message(inner)
@@ -75,6 +98,88 @@ def coerce_error_message(value: Any) -> str:
             return json.dumps(value, ensure_ascii=False)
         except (TypeError, ValueError):
             return str(value)
+    if isinstance(value, (list, tuple)):
+        parts = [coerce_error_message(item) for item in value]
+        return "; ".join(part for part in parts if part) or str(value)
+    return str(value)
+
+
+def _try_parse_embedded_error(text: str) -> Any | None:
+    """Parse a JSON object or Python ``str(dict)`` trailer payload."""
+    if not text or text[0] not in "{[":
+        return None
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    try:
+        import ast
+
+        parsed = ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        return None
+    return parsed if isinstance(parsed, (dict, list, tuple)) else None
+
+
+def _extract_upstream_error_code(value: Any) -> str | None:
+    if isinstance(value, str):
+        match = re.search(r"ERROR_[A-Z0-9_]+", value)
+        return match.group(0) if match else None
+    if not isinstance(value, dict):
+        return None
+    for key in ("error", "code", "error_code"):
+        raw = value.get(key)
+        if isinstance(raw, str) and raw.startswith("ERROR_"):
+            return raw.strip()
+        if isinstance(raw, dict):
+            nested = _extract_upstream_error_code(raw)
+            if nested:
+                return nested
+    details = value.get("details")
+    if isinstance(details, list):
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            debug = item.get("debug")
+            if isinstance(debug, dict):
+                nested = _extract_upstream_error_code(debug)
+                if nested:
+                    return nested
+            nested = _extract_upstream_error_code(item)
+            if nested:
+                return nested
+    return None
+
+
+def _friendly_upstream_code_message(code: str) -> str:
+    """Map known Cursor/ai-server error codes to short Chinese messages."""
+    if not code:
+        return ""
+    code = code.strip()
+    mapping = {
+        "ERROR_NOT_HIGH_ENOUGH_PERMISSIONS": (
+            "上游拒绝推理（ERROR_NOT_HIGH_ENOUGH_PERMISSIONS / Access denied）："
+            "凭证未过期（token type=grok_bot 可用），/v1/usage 也可返回 hasAvailableUsage，"
+            "但这不等于 InferenceService/Stream 放行。"
+            "实测：官方 Grok Bot 桌面聊天走 GrokBotService.SendGrokBotUserMessage（沙箱 Agent），"
+            "而本网关走 aiserver.v1.InferenceService/Stream；在 SuperGrok + Cursor Free、"
+            "GetHardLimit.noUsageBasedAllowed=true 时，后者会稳定返回 permission_denied。"
+            "对齐 client-version/source/os、packed model id、max_mode 均无法消除该错误。"
+            "请升级 Cursor 付费档（或确认账号具备 Stream 推理权），或等待网关实现 Agent 消息通道。"
+            "这不是 sbi_/JWT 过期。"
+        ),
+        "ERROR_NOT_LOGGED_IN": (
+            "上游未登录（ERROR_NOT_LOGGED_IN）：推理令牌无效或已过期，请重新导入/粘贴 sbi_ 续期凭证。"
+        ),
+        "ERROR_RATE_LIMITED": "请求过于频繁（ERROR_RATE_LIMITED），请稍后重试。",
+        "ERROR_USAGE_EXCEEDED": "用量已耗尽（ERROR_USAGE_EXCEEDED），请等待周期重置或升级套餐。",
+    }
+    if code in mapping:
+        return mapping[code]
+    if code.startswith("ERROR_"):
+        return f"上游拒绝（{code}）。"
+    return ""
+
     if isinstance(value, (list, tuple)):
         parts = [coerce_error_message(item) for item in value]
         return "; ".join(part for part in parts if part) or str(value)
@@ -304,10 +409,24 @@ def encode_native_request(
         body += upstream.pb_msg(2, proto_tool)
 
     params = list(model_params) if model_params is not None else list(upstream.DEFAULT_MODEL_PARAMS)
-    requested = upstream.pb_str(1, model) + upstream.pb_bool(2, max_mode)
-    for parameter_id, parameter_value in params:
-        parameter = upstream.pb_str(1, parameter_id) + upstream.pb_str(2, parameter_value)
-        requested += upstream.pb_msg(3, parameter)
+    # Prefer sand_inference.encode_requested_model when available (variant/built_in fields).
+    encode_rm = getattr(upstream, "encode_requested_model", None)
+    if callable(encode_rm):
+        requested = encode_rm(
+            model,
+            max_mode,
+            params,
+            is_variant_string_representation=not bool(params),
+        )
+    else:
+        requested = upstream.pb_str(1, model)
+        if max_mode:
+            requested += upstream.pb_bool(2, True)
+        for parameter_id, parameter_value in params:
+            parameter = upstream.pb_str(1, parameter_id) + upstream.pb_str(2, parameter_value)
+            requested += upstream.pb_msg(3, parameter)
+        if not params:
+            requested += upstream.pb_bool(8, True)  # is_variant_string_representation
     body += upstream.pb_msg(7, requested)
     body += upstream.pb_str(6, invocation_id)
     if conversation_id:
@@ -419,7 +538,7 @@ def decode_native_response(upstream: ModuleType, raw: bytes, status: int, reques
 
     texts: list[str] = []
     thinking: list[str] = []
-    errors: list[str] = []
+    errors: list[Any] = []
     image_descriptions: list[str] = []
     response_model = model
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -433,7 +552,7 @@ def decode_native_response(upstream: ModuleType, raw: bytes, status: int, reques
             try:
                 trailer = json.loads(payload.decode("utf-8") or "{}")
                 if isinstance(trailer, dict) and trailer.get("error"):
-                    errors.append(str(trailer["error"]))
+                    errors.append(trailer["error"])
             except Exception:
                 pass
             continue
@@ -604,6 +723,8 @@ class SandBackend:
             conversation_id=options.conversation_id,
             client_type=options.client_type,
             client_version=options.client_version,
+            client_source=getattr(options, "client_source", None) or "sand-desktop",
+            client_os=getattr(options, "client_os", None) or "",
             namespace=options.namespace,
             team_id=options.team_id,
             timeout_ms=options.timeout_ms,
@@ -748,7 +869,7 @@ class SandBackend:
                 base = ModelSpec(
                     alias=self.options.model,
                     upstream_id=self.options.model,
-                    params=[("effort", "high"), ("fast", "false")],
+                    params=[],
                 )
             base.upstream_id = self.options.model
             return base
@@ -2283,7 +2404,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=18765)
     parser.add_argument(
         "--model",
-        default="grok-4.7",
+        default="grok-4.7-high",
         help="upstream model used when the client omits model (fallback)",
     )
     parser.add_argument(
@@ -2303,7 +2424,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-mode", action="store_true")
     parser.add_argument("--conversation-id", default="")
     parser.add_argument("--client-type", default="sand")
-    parser.add_argument("--client-version", default="0.30.0")
+    parser.add_argument("--client-version", default="0.58.0")
+    parser.add_argument("--client-source", default=os.environ.get("SAND_CLIENT_SOURCE") or "sand-desktop")
+    parser.add_argument("--client-os", default=os.environ.get("SAND_CLIENT_OS") or "")
     parser.add_argument("--namespace", default="prod")
     parser.add_argument("--team-id", default="")
     parser.add_argument("--timeout-ms", type=int, default=600000)
@@ -2365,3 +2488,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -75,7 +75,9 @@ X-Cursor-Checksum: <time-derived-prefix><machine-id>
 X-Ghost-Mode: true
 X-Request-Id: <uuid>
 X-Cursor-Client-Type: sand
-X-Cursor-Client-Version: 0.30.0
+X-Cursor-Client-Version: 0.58.0
+X-Cursor-Client-Source: sand-desktop
+X-Cursor-Client-Os: win32
 X-Sand-Box-Namespace: prod
 ```
 
@@ -115,8 +117,9 @@ message InferenceRequestedModel {
   string model_id = 1;
   bool max_mode = 2;
   repeated InferenceModelParameterValue parameters = 3;
-  bool built_in_model = 4;
-  bool is_variant_string_representation = 5;
+  // fields 4-6: credentials oneof
+  bool built_in_model = 7;
+  bool is_variant_string_representation = 8;
 }
 
 message InferenceModelParameterValue {
@@ -125,7 +128,9 @@ message InferenceModelParameterValue {
 }
 ```
 
-Client-facing aliases (for example `cursor-grok-4-7-fast`) map to an upstream `model_id` plus parameter list. Typical Grok params:
+Client-facing aliases (for example `cursor-grok-4-7-fast`) map to an upstream `model_id` plus parameter list. As of 2026-09-28, `GetUsableModels` lists packed ids such as `grok-4.7-high` / `cursor-grok-4.6-high-fast` (effort/fast in the modelId). Bare `grok-4.7` with separate params is rejected with `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS`.
+
+Typical legacy Grok params (deprecated for usable routing):
 
 ```text
 effort=high
@@ -588,3 +593,9 @@ Keep protocol changes isolated, add offline protobuf tests, and test live behavi
 ## Public alternatives
 
 Cursor publishes other supported integration surfaces, including the `sdk.v1` SDK Bridge protocol, ACP, and Cloud Agents APIs. Those interfaces operate at the Cursor agent level and are not drop-in replacements for this raw model-inference bridge.
+
+
+
+## Entitlement note (2026-09-28)
+
+Official Grok Bot desktop chat uses `GrokBotService/SendGrokBotUserMessage`. This proxy uses `InferenceService/Stream`. On SuperGrok + Cursor Free with `noUsageBasedAllowed=true`, Stream returns ERROR_NOT_HIGH_ENOUGH_PERMISSIONS despite working usage and official chat. Header tweaks alone do not fix it.

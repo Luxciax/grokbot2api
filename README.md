@@ -372,6 +372,11 @@ See [docs/protocol.md](docs/protocol.md) for the wire-format reference.
 
 ## Troubleshooting
 
+### `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` / Access denied
+
+If `/v1/usage` works but chat returns permission_denied, credentials are usually **not** expired. Official chat uses SandBox agent RPC; this proxy uses InferenceService/Stream. See `docs/protocol.md`.
+
+
 ### `SAND_INFERENCE_RENEWAL_CREDENTIAL` is not set
 
 Export a valid credential before starting the proxy. Never commit it, paste it into an issue, or include it in logs.

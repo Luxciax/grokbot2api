@@ -30,13 +30,13 @@ INFERENCE_PATH = "/aiserver.v1.InferenceService/Stream"
 CREDENTIAL_ENV = "SAND_INFERENCE_RENEWAL_CREDENTIAL"
 
 DEFAULT_CLIENT_TYPE = "sand"
-DEFAULT_CLIENT_VERSION = "0.30.0"
+DEFAULT_CLIENT_VERSION = "0.58.0"
 DEFAULT_NAMESPACE = "prod"
 
 # src/shared/agents/agent-model.ts
-DEFAULT_MODEL_ID = "grok-4.5"
+DEFAULT_MODEL_ID = "grok-4.7-high"
 DEFAULT_MAX_MODE = False
-DEFAULT_MODEL_PARAMS = (("effort", "high"), ("fast", "true"))
+DEFAULT_MODEL_PARAMS: tuple[tuple[str, str], ...] = ()
 
 REFRESH_LEEWAY_MS = 2 * 60 * 1000
 DEFAULT_TTL_MS = 10 * 60 * 1000
@@ -119,12 +119,29 @@ def encode_param(pid: str, value: str) -> bytes:
     return pb_str(1, pid) + pb_str(2, value)
 
 
-def encode_requested_model(model_id: str, max_mode: bool, params: list[tuple[str, str]]) -> bytes:
+def encode_requested_model(
+    model_id: str,
+    max_mode: bool,
+    params: list[tuple[str, str]],
+    *,
+    built_in_model: bool = False,
+    is_variant_string_representation: bool = False,
+) -> bytes:
+    """Encode aiserver.v1 RequestedModel.
+
+    Official schema (Grok Bot 0.58): model_id=1, max_mode=2, parameters=3,
+    api_key_credentials=4, azure=5, bedrock=6, built_in_model=7,
+    is_variant_string_representation=8. Protocol.md previously mis-numbered 4/5.
+    """
     inner = pb_str(1, model_id)
     if max_mode:
         inner += pb_bool(2, True)
     for pid, value in params:
         inner += pb_msg(3, encode_param(pid, value))
+    if built_in_model:
+        inner += pb_bool(7, True)
+    if is_variant_string_representation:
+        inner += pb_bool(8, True)
     return inner
 
 
@@ -140,7 +157,15 @@ def encode_stream_request(
     for role, text in messages:
         body += pb_msg(1, encode_core_message(role, text))
     if model_id:
-        body += pb_msg(7, encode_requested_model(model_id, max_mode, params))
+        body += pb_msg(
+            7,
+            encode_requested_model(
+                model_id,
+                max_mode,
+                params,
+                is_variant_string_representation=not bool(params),
+            ),
+        )
     if invocation_id:
         body += pb_str(6, invocation_id)
     if conversation_id:
@@ -242,12 +267,27 @@ def load_machine_id() -> str:
     return uuid.uuid5(uuid.NAMESPACE_OID, f"{node:012x}").hex
 
 
+def default_client_os() -> str:
+    """Grok Bot 0.58 statsigClientOsOf returns CLIENT_OS_* enum strings."""
+    return {"win32": "CLIENT_OS_WINDOWS", "darwin": "CLIENT_OS_MACOS", "linux": "CLIENT_OS_LINUX"}.get(
+        sys.platform, "CLIENT_OS_UNSPECIFIED"
+    )
+
+
 def client_meta(args) -> dict[str, str]:
+    # Grok Bot 0.58 desktop also sends x-cursor-client-source / x-cursor-client-os
+    # (see app.asar getSandBackendClientHeaders). Observed: CLIENT_OS_WINDOWS not win32.
+    client_os = (getattr(args, "client_os", None) or os.environ.get("SAND_CLIENT_OS") or "").strip()
+    if not client_os:
+        client_os = default_client_os()
     return {
         "x-cursor-client-type": args.client_type,
         "x-cursor-client-version": args.client_version,
+        "x-cursor-client-source": getattr(args, "client_source", None) or "sand-desktop",
+        "x-cursor-client-os": client_os,
         "x-sand-box-namespace": args.namespace,
     }
+
 
 
 def jwt_exp_ms(token: str) -> int | None:
@@ -625,3 +665,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

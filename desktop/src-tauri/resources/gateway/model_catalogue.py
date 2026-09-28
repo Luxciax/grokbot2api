@@ -28,6 +28,9 @@ class ModelSpec:
     capabilities: list[str] = field(default_factory=lambda: ["chat"])
     notes: str = ""
     is_custom: bool = False
+    # Packed GetUsableModels ids (e.g. grok-4.7-high) are variant string representations;
+    # effort/fast live in the modelId, not in RequestedModel.parameters.
+    is_variant_string: bool = True
 
     def to_public(self) -> dict[str, Any]:
         return {
@@ -43,94 +46,90 @@ class ModelSpec:
             "enabled": self.enabled,
             "notes": self.notes,
             "is_custom": self.is_custom,
+            "is_variant_string": self.is_variant_string,
         }
 
 
-def _spec(
+def _packed(
     alias: str,
     upstream_id: str,
     *,
-    fast: bool,
-    effort: str | None = "high",
     display_name: str = "",
     context_window: int = 256000,
     notes: str = "",
+    supports_vision: bool = True,
 ) -> ModelSpec:
-    params: list[tuple[str, str]] = []
-    if effort is not None:
-        params.append(("effort", effort))
-    params.append(("fast", "true" if fast else "false"))
+    """Map a client alias to a packed upstream modelId with no effort/fast params."""
     return ModelSpec(
         alias=alias,
         upstream_id=upstream_id,
-        params=params,
+        params=[],
         display_name=display_name or alias,
         context_window=context_window,
         capabilities=["chat"],
         notes=notes,
+        supports_vision=supports_vision,
+        is_variant_string=True,
     )
 
 
-# Cursor Models pool (Grok Bot / sand). IDs match agent-model.ts / Cursor docs.
-# Fast variants set model param fast=true; non-fast keep fast=false.
+# 2026-09-28: AiService/GetUsableModels no longer lists bare grok-4.7 / grok-4.6.
+# Effort/fast are packed into modelId (grok-4.7-high, cursor-grok-4.6-high-fast, ...).
+# Sending legacy bare ids + parameters yields ERROR_NOT_HIGH_ENOUGH_PERMISSIONS.
 BUILTIN_MODELS: list[ModelSpec] = [
-    _spec(
+    _packed(
         "cursor-grok-4-7",
-        "grok-4.7",
-        fast=False,
+        "grok-4.7-high",
         display_name="Cursor Grok 4.7",
-        notes="Standard speed; effort=high",
+        notes="Upstream packed id grok-4.7-high (effort in modelId)",
+        supports_vision=False,
     ),
-    _spec(
+    _packed(
         "cursor-grok-4-7-fast",
-        "grok-4.7",
-        fast=True,
+        "grok-4.7-high-fast",
         display_name="Cursor Grok 4.7 Fast",
-        notes="Fast tier; effort=high",
+        notes="Upstream packed id grok-4.7-high-fast",
+        supports_vision=False,
     ),
-    _spec(
+    _packed(
         "cursor-grok-4-6",
-        "grok-4.6",
-        fast=False,
+        "cursor-grok-4.6-high",
         display_name="Cursor Grok 4.6",
-        notes="Standard speed; effort=high",
+        notes="Upstream packed id cursor-grok-4.6-high",
     ),
-    _spec(
+    _packed(
         "cursor-grok-4-6-fast",
-        "grok-4.6",
-        fast=True,
+        "cursor-grok-4.6-high-fast",
         display_name="Cursor Grok 4.6 Fast",
-        notes="Fast tier; effort=high",
+        notes="Upstream packed id cursor-grok-4.6-high-fast (legacy slug grok-4.6)",
     ),
-    _spec(
+    _packed(
         "cursor-grok-4-5",
-        "grok-4.5",
-        fast=False,
+        "cursor-grok-4.5-high",
         display_name="Cursor Grok 4.5",
-        notes="Standard speed; effort=high",
+        notes="Upstream packed id cursor-grok-4.5-high",
+        supports_vision=False,
     ),
-    _spec(
+    _packed(
         "cursor-grok-4-5-fast",
-        "grok-4.5",
-        fast=True,
+        "cursor-grok-4.5-high-fast",
         display_name="Cursor Grok 4.5 Fast",
-        notes="Matches sand_inference DEFAULT_MODEL_PARAMS",
+        notes="Upstream packed id cursor-grok-4.5-high-fast",
+        supports_vision=False,
     ),
-    _spec(
+    _packed(
         "cursor-composer-2-5",
         "composer-2.5",
-        fast=False,
-        effort=None,
         display_name="Cursor Composer 2.5",
-        notes="Composer does not use the Grok effort param",
+        notes="Composer 2.5 standard",
+        supports_vision=False,
     ),
-    _spec(
+    _packed(
         "cursor-composer-2-5-fast",
-        "composer-2.5",
-        fast=True,
-        effort=None,
+        "composer-2.5-fast",
         display_name="Cursor Composer 2.5 Fast",
-        notes="Product default speed for Composer 2.5",
+        notes="Composer 2.5 fast (product default)",
+        supports_vision=False,
     ),
     ModelSpec(
         alias="cursor-generate-image",
@@ -144,21 +143,39 @@ BUILTIN_MODELS: list[ModelSpec] = [
             "Maps to AiService/RunGenerateImage (session token). "
             "Client model_id is often ignored server-side (Google image model)."
         ),
+        is_variant_string=False,
     ),
 ]
 
-# Also accept bare upstream IDs and common shorthand so clients can pass
-# grok-4.7 / grok-4.6 / composer-2.5 directly (routed with default high/fast=false).
+# Bare / legacy ids -> packed upstream (no effort/fast params).
 UPSTREAM_PASSTHROUGH: dict[str, ModelSpec] = {
-    "grok-4.7": _spec("grok-4.7", "grok-4.7", fast=False, display_name="Grok 4.7 (upstream id)"),
-    "grok-4.6": _spec("grok-4.6", "grok-4.6", fast=False, display_name="Grok 4.6 (upstream id)"),
-    "grok-4.5": _spec("grok-4.5", "grok-4.5", fast=False, display_name="Grok 4.5 (upstream id)"),
-    "composer-2.5": _spec(
-        "composer-2.5",
-        "composer-2.5",
-        fast=False,
-        effort=None,
-        display_name="Composer 2.5 (upstream id)",
+    "grok-4.7": _packed("grok-4.7", "grok-4.7-high", display_name="Grok 4.7 (packed high)", supports_vision=False),
+    "grok-4.7-high": _packed("grok-4.7-high", "grok-4.7-high", display_name="Grok 4.7 High", supports_vision=False),
+    "grok-4.7-high-fast": _packed(
+        "grok-4.7-high-fast", "grok-4.7-high-fast", display_name="Grok 4.7 High Fast", supports_vision=False
+    ),
+    "grok-4.6": _packed(
+        "grok-4.6",
+        "cursor-grok-4.6-high-fast",
+        display_name="Grok 4.6 (legacy→cursor-grok-4.6-high-fast)",
+    ),
+    "grok-4.5": _packed(
+        "grok-4.5",
+        "cursor-grok-4.5-high",
+        display_name="Grok 4.5 (legacy→cursor-grok-4.5-high)",
+        supports_vision=False,
+    ),
+    "composer-2.5": _packed("composer-2.5", "composer-2.5", display_name="Composer 2.5", supports_vision=False),
+    "composer-2.5-fast": _packed(
+        "composer-2.5-fast", "composer-2.5-fast", display_name="Composer 2.5 Fast", supports_vision=False
+    ),
+    "cursor-grok-4.6-high": _packed(
+        "cursor-grok-4.6-high", "cursor-grok-4.6-high", display_name="Cursor Grok 4.6 High"
+    ),
+    "cursor-grok-4.6-high-fast": _packed(
+        "cursor-grok-4.6-high-fast",
+        "cursor-grok-4.6-high-fast",
+        display_name="Cursor Grok 4.6 High Fast",
     ),
 }
 
@@ -174,7 +191,7 @@ class ModelCatalogue:
         *,
         default_alias: str = DEFAULT_ALIAS,
         config_path: Path | None = None,
-        fallback_upstream: str = "grok-4.7",
+        fallback_upstream: str = "grok-4.7-high",
     ) -> None:
         self.lock = threading.Lock()
         self.config_path = Path(config_path) if config_path else DEFAULT_ADMIN_CONFIG
@@ -282,7 +299,7 @@ class ModelCatalogue:
             return ModelSpec(
                 alias=requested or self.fallback_upstream,
                 upstream_id=self.fallback_upstream,
-                params=[("effort", "high"), ("fast", "false")],
+                params=[],
                 display_name=self.fallback_upstream,
             )
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- Align client headers with Grok Bot 0.58: version `0.58.0`, `x-cursor-client-source: sand-desktop`, `x-cursor-client-os: CLIENT_OS_*`.
+- Catalogue: prefer packed upstream ids (`grok-4.7-high`, `…-high-fast`, `composer-2.5`) and set RequestedModel field 8 (`is_variant_string_representation`) when params are empty; correct built_in/variant field numbers (7/8).
+- Improve `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` message: do not blame expired credentials; note official chat uses `SendGrokBotUserMessage` while this proxy uses `InferenceService/Stream`, which stays denied on some SuperGrok+Cursor Free accounts (`noUsageBasedAllowed=true`) even after header/model packing.
 ## 0.3.5
 
 - Fix: workbench/admin never displays `[object Object]` — shared `formatErr` extracts `error.message` / JSON.
@@ -62,3 +67,4 @@
 
 ### Deprecated
 - Python/tk tray UI under `windows/` (sidecar build helpers remain)
+
