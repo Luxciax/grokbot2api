@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8
+
+- Fix: in `chat_mode=agent` (default), ignore client `tools` and stay on GrokBotService instead of falling through to `InferenceService/Stream` (Hermes and similar clients attach builtin tools → previous 502 `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS`).
+- Add: `GROKBOT_AGENT_STRIP_TOOLS=0/false` restores Stream-when-tools for accounts that have Stream access.
+- Improve: shorter Chinese message for `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` (mentions client tools as a common cause).
+
 ## 0.3.7
 
 - Fix: bridge `/v1/chat/completions` through official **GrokBotService** (`SendGrokBotUserMessage` + transcript poll) using the session JWT — same path as Grok Bot 0.58 desktop. `InferenceService/Stream` remains via `GROKBOT_CHAT_MODE=stream` but still returns `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS` on SuperGrok + Cursor Free.
