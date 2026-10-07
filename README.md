@@ -437,7 +437,7 @@ python3 -m py_compile windows/app.py windows/main.py windows/credentials.py wind
 cd desktop/crates/os_crypt && cargo test
 ```
 
-Desktop (Tauri) docs: [`desktop/README.md`](desktop/README.md). Credential import: [`docs/windows-credential-import.md`](docs/windows-credential-import.md). Changelog: [`CHANGELOG.md`](CHANGELOG.md).
+Desktop (Tauri) docs: [`desktop/README.md`](desktop/README.md). UI design brief: [`desktop/docs/ui-design-brief.md`](desktop/docs/ui-design-brief.md). Credential import: [`docs/windows-credential-import.md`](docs/windows-credential-import.md). Changelog: [`CHANGELOG.md`](CHANGELOG.md).
 
 No live credential is required for tests.
 

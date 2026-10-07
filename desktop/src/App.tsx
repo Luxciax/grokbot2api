@@ -9,6 +9,15 @@ import type {
   ThemeMode,
 } from "./types";
 import { APP_VERSION, NAV_ITEMS } from "./types";
+import {
+  BrandMark,
+  IconClose,
+  IconOffline,
+  IconPlay,
+  IconSettings,
+  IconStop,
+  NavIcon,
+} from "./icons";
 import "./App.css";
 
 /** Flatten Tauri/JS errors so UI never shows [object Object]. */
@@ -360,7 +369,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true" />
+          <BrandMark />
           <span className="brand-text">grokbot2api</span>
           <span className="brand-ver">v{APP_VERSION}</span>
         </div>
@@ -373,7 +382,7 @@ export default function App() {
               className={`nav-item ${nav === item.id ? "active" : ""}`}
               onClick={() => selectNav(item.id)}
             >
-              <span className="nav-dot" />
+              <NavIcon id={item.id} />
               {item.label}
             </button>
           ))}
@@ -385,7 +394,7 @@ export default function App() {
                 className={`nav-item ${nav === setupNav.id ? "active" : ""}`}
                 onClick={() => selectNav(setupNav.id)}
               >
-                <span className="nav-dot" />
+                <NavIcon id={setupNav.id} />
                 {setupNav.label}
               </button>
             </>
@@ -411,7 +420,9 @@ export default function App() {
                 className="btn btn-secondary btn-sm"
                 disabled={busy}
                 onClick={() => void onStop()}
+                title="停止网关"
               >
+                <IconStop size={14} />
                 停止
               </button>
             ) : (
@@ -420,7 +431,9 @@ export default function App() {
                 className="btn btn-primary btn-sm"
                 disabled={busy}
                 onClick={() => void onStart()}
+                title="启动网关"
               >
+                <IconPlay size={14} />
                 {busy ? "启动中" : "启动"}
               </button>
             )}
@@ -428,7 +441,9 @@ export default function App() {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => setSettingsOpen(true)}
+              title="设置"
             >
+              <IconSettings size={14} />
               设置
             </button>
           </div>
@@ -780,6 +795,7 @@ export default function App() {
               </div>
             ) : (
               <div className="empty">
+                <IconOffline size={20} className="empty-ico" />
                 <div className="empty-title">网关未运行</div>
                 <div className="empty-desc">
                   启动后打开「
@@ -824,11 +840,12 @@ export default function App() {
           </div>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm btn-ico"
             aria-label="关闭"
+            title="关闭"
             onClick={() => setSettingsOpen(false)}
           >
-            关闭
+            <IconClose size={14} />
           </button>
         </div>
         <div className="drawer-body">

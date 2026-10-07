@@ -53,7 +53,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.12"
+__version__ = "0.3.13"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -1293,20 +1293,86 @@ Otherwise send <code>Authorization: Bearer &lt;key&gt;</code> or <code>x-api-key
 
 
 ADMIN_LOGIN_HTML = """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"/><title>grokbot2api 登录</title>
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>grokbot2api 登录</title>
 <style>
-body{font-family:system-ui,sans-serif;background:#0f1419;color:#e7ecf3;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
-card{background:#1a2332;padding:2rem;border-radius:12px;width:min(420px,92vw);box-shadow:0 8px 32px #0008}
-h1{font-size:1.2rem;margin:0 0 1rem}
-input,button{width:100%;padding:.7rem .8rem;margin:.4rem 0;border-radius:8px;border:1px solid #334;background:#0f1419;color:#e7ecf3;box-sizing:border-box}
-button{background:#3b82f6;border:none;cursor:pointer;font-weight:600}
-p{color:#9aa;font-size:.9rem}
-</style></head><body><card>
-<h1>grokbot2api 管理后台</h1>
-<p>需要与代理相同的 API Key（Bearer）。未配置密钥时可直接打开 <code>/admin</code>。</p>
-<input id="key" type="password" placeholder="API Key（主密钥或客户端密钥）"/>
-<button onclick="login()">登录</button>
-<p id="err" style="color:#f87171"></p>
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0d;
+  --bg-elevated: #121214;
+  --bg-hover: #1a1a1d;
+  --border: #232326;
+  --border-strong: #2e2e33;
+  --text: #ececef;
+  --text-secondary: #a0a0a8;
+  --text-muted: #6b6b74;
+  --accent: #3d9a6a;
+  --accent-hover: #48ad78;
+  --accent-fg: #0a0a0a;
+  --danger: #c45c5c;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font: "Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono: "SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f7f7f8;
+    --bg-elevated: #ffffff;
+    --bg-hover: #f0f0f2;
+    --border: #e8e8ec;
+    --border-strong: #d8d8de;
+    --text: #1a1a1f;
+    --text-secondary: #5c5c66;
+    --text-muted: #8a8a96;
+    --accent: #2f8f63;
+    --accent-hover: #277a54;
+    --accent-fg: #ffffff;
+    --danger: #c04545;
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+.card{
+  background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);
+  width:min(380px,100%);padding:22px 22px 20px;box-shadow:0 8px 28px rgba(0,0,0,.18)
+}
+.brand{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.brand-mark{
+  width:18px;height:18px;border-radius:4px;background:var(--accent);color:var(--accent-fg);
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0
+}
+.brand-mark svg{display:block}
+.brand-text{font-size:13px;font-weight:560;letter-spacing:-0.01em}
+h1{font-size:15px;font-weight:560;letter-spacing:-0.02em;margin:0 0 6px}
+.sub{color:var(--text-muted);font-size:12px;margin:0 0 16px}
+.sub code{font-family:var(--mono);font-size:11px;color:var(--text-secondary)}
+label{display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px}
+input{
+  width:100%;padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font:inherit;box-sizing:border-box
+}
+input:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 2px rgba(61,154,106,.18)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;width:100%;margin-top:12px;
+  padding:8px 12px;border-radius:var(--radius);border:none;cursor:pointer;
+  background:var(--accent);color:var(--accent-fg);font-size:13px;font-weight:500
+}
+.btn:hover{background:var(--accent-hover)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#err{color:var(--danger);font-size:12px;min-height:1.2em;margin-top:10px}
+</style></head><body>
+<div class="card">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 5.5h5.5a2.5 2.5 0 0 1 0 5H7.5V8.25h2.25" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="brand-text">grokbot2api</span></div>
+  <h1>管理后台登录</h1>
+  <p class="sub">使用与代理相同的 API Key（Bearer）。未配置密钥时可直接打开 <code>/admin</code>。</p>
+  <label for="key">API Key</label>
+  <input id="key" type="password" autocomplete="current-password" placeholder="主密钥或客户端密钥" autofocus/>
+  <button type="button" class="btn" onclick="login()">登录</button>
+  <p id="err"></p>
+</div>
 <script>
 function formatErr(v){
   if(v==null||v==='') return '';
@@ -1329,7 +1395,8 @@ async function login(){
   if(store) localStorage.setItem('grokbot2api_key', store);
   location.href='/admin';
 }
-</script></card></body></html>
+document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+</script></body></html>
 """
 
 
@@ -1399,7 +1466,8 @@ code{font-family:var(--mono);font-size:12px}
   padding:12px 8px;display:flex;flex-direction:column;gap:1px;user-select:none
 }
 .brand{display:flex;align-items:center;gap:8px;padding:8px 8px 12px}
-.brand-mark{width:14px;height:14px;border-radius:4px;background:var(--accent);opacity:.85;flex-shrink:0}
+.brand-mark{width:14px;height:14px;border-radius:4px;background:var(--accent);color:var(--accent-fg);opacity:.95;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.brand-mark svg{display:block}
 .brand-text{font-size:13px;font-weight:560;letter-spacing:-0.01em}
 .brand small{display:block;color:var(--text-muted);font-weight:400;font-size:11px;margin-top:1px}
 .navbtn{
@@ -1409,8 +1477,14 @@ code{font-family:var(--mono);font-size:12px}
 }
 .navbtn:hover{background:var(--bg-hover);color:var(--text)}
 .navbtn.active{background:var(--bg-active);color:var(--text);font-weight:500}
-.nav-dot{width:5px;height:5px;border-radius:50%;background:transparent;flex-shrink:0}
-.navbtn.active .nav-dot{background:var(--accent)}
+.nav-ico{display:inline-flex;width:16px;height:16px;flex-shrink:0;color:var(--text-muted);align-items:center;justify-content:center}
+.navbtn:hover .nav-ico{color:var(--text-secondary)}
+.navbtn.active .nav-ico{color:var(--accent)}
+.nav-ico svg{display:block}
+.empty-inline{display:inline-flex;align-items:center;justify-content:center;gap:8px;color:var(--text-muted)}
+.empty-ico{opacity:.7;flex-shrink:0}
+.empty-block{display:flex;align-items:center;justify-content:center;gap:8px;padding:28px 12px;color:var(--text-muted);font-size:12px}
+.empty-block .empty-ico{opacity:.7}
 
 .content{display:flex;flex-direction:column;min-width:0;min-height:100vh}
 .topbar{
@@ -1420,7 +1494,7 @@ code{font-family:var(--mono);font-size:12px}
 }
 .topbar h1{margin:0;font-size:14px;font-weight:560;letter-spacing:-0.01em}
 .topbar .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.topbar a.link{color:var(--text-muted);font-size:12px;padding:4px 8px;border-radius:var(--radius)}
+.topbar a.link{color:var(--text-muted);font-size:12px;padding:4px 8px;border-radius:var(--radius);display:inline-flex;align-items:center;gap:4px}
 .topbar a.link:hover{color:var(--text);background:var(--bg-hover);text-decoration:none}
 
 main{display:none;padding:16px;flex:1}
@@ -1536,25 +1610,25 @@ html.embed body{overflow:auto}
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
-      <span class="brand-mark"></span>
+      <span class="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 5.5h5.5a2.5 2.5 0 0 1 0 5H7.5V8.25h2.25" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <div><div class="brand-text">工作台</div><small id="ver"></small></div>
     </div>
-    <button class="navbtn active" data-sec="overview" onclick="showSec('overview')"><span class="nav-dot"></span>总览</button>
-    <button class="navbtn" data-sec="models" onclick="showSec('models')"><span class="nav-dot"></span>模型</button>
-    <button class="navbtn" data-sec="keys" onclick="showSec('keys')"><span class="nav-dot"></span>密钥</button>
-    <button class="navbtn" data-sec="audits" onclick="showSec('audits')"><span class="nav-dot"></span>审计</button>
-    <button class="navbtn" data-sec="media" onclick="showSec('media')"><span class="nav-dot"></span>媒体</button>
-    <button class="navbtn" data-sec="playground" onclick="showSec('playground')"><span class="nav-dot"></span>试用</button>
-    <button class="navbtn" data-sec="settings" onclick="showSec('settings')"><span class="nav-dot"></span>设置</button>
+    <button class="navbtn active" data-sec="overview" onclick="showSec('overview')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span>总览</button>
+    <button class="navbtn" data-sec="models" onclick="showSec('models')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5 13 5.5 8 8.5 3 5.5 8 2.5Z"/><path d="M3 8l5 3 5-3"/><path d="M3 10.5l5 3 5-3"/></svg></span>模型</button>
+    <button class="navbtn" data-sec="keys" onclick="showSec('keys')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="3.25"/><path d="M8.5 9.5 13.5 14.5"/><path d="M11.5 12.5h2.5v2"/></svg></span>密钥</button>
+    <button class="navbtn" data-sec="audits" onclick="showSec('audits')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5h7A1.5 1.5 0 0 1 13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4A1.5 1.5 0 0 1 4.5 2.5Z"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3.5"/></svg></span>审计</button>
+    <button class="navbtn" data-sec="media" onclick="showSec('media')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1"/><path d="m5 11 2.5-2.5L10 11l1.5-1.5L14 11"/></svg></span>媒体</button>
+    <button class="navbtn" data-sec="playground" onclick="showSec('playground')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M6.75 5.75v4.5L11 8 6.75 5.75Z" fill="currentColor" stroke="none"/></svg></span>试用</button>
+    <button class="navbtn" data-sec="settings" onclick="showSec('settings')"><span class="nav-ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.25"/><path d="M8 2.5v1.5M8 12v1.5M2.5 8H4M12 8h1.5M4.05 4.05l1.06 1.06M10.89 10.89l1.06 1.06M4.05 11.95l1.06-1.06M10.89 5.11l1.06-1.06"/></svg></span>设置</button>
   </aside>
   <div class="content">
     <div class="topbar">
       <h1 id="secTitle">总览</h1>
       <div class="row">
-        <a class="link" href="/docs" target="_blank" rel="noopener">API 文档</a>
-        <a class="link" href="/health" target="_blank" rel="noopener">Health</a>
-        <button type="button" class="btn btn-ghost" onclick="refreshAll()">刷新</button>
-        <button type="button" class="btn btn-ghost hide-embed" onclick="logout()">退出</button>
+        <a class="link" href="/docs" target="_blank" rel="noopener" title="API 文档"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h4v4M13 3 8 8"/><path d="M7 4H4.5A1.5 1.5 0 0 0 3 5.5v6A1.5 1.5 0 0 0 4.5 13h6A1.5 1.5 0 0 0 12 11.5V9"/></svg> API 文档</a>
+        <a class="link" href="/health" target="_blank" rel="noopener" title="Health"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h4v4M13 3 8 8"/><path d="M7 4H4.5A1.5 1.5 0 0 0 3 5.5v6A1.5 1.5 0 0 0 4.5 13h6A1.5 1.5 0 0 0 12 11.5V9"/></svg> Health</a>
+        <button type="button" class="btn btn-ghost" onclick="refreshAll()" title="刷新"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.2-3.3"/><path d="M13 3.5V7H9.5"/></svg> 刷新</button>
+        <button type="button" class="btn btn-ghost hide-embed" onclick="logout()" title="退出"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v7A1.5 1.5 0 0 0 3.5 13H6"/><path d="M10.5 11.5 14 8l-3.5-3.5M14 8H6.5"/></svg> 退出</button>
       </div>
     </div>
 
@@ -1757,7 +1831,7 @@ function renderOverview(s){
   const errs=stats.recent_errors||[];
   document.getElementById('recentErrorsCard').innerHTML=`<div class="panel-title">最近错误</div><div class="table-wrap"><table><thead><tr><th>时间</th><th>路由</th><th>模型</th><th>错误</th></tr></thead><tbody>${
     errs.length? errs.slice().reverse().map(e=>`<tr><td>${new Date((e.ts||0)*1000).toLocaleString()}</td><td>${esc(e.route||'')}</td><td>${esc(e.model||'')}</td><td class="bad">${esc(e.error||'')}</td></tr>`).join('')
-    : '<tr class="empty-row"><td colspan="4">暂无错误</td></tr>'}</tbody></table></div>`;
+    : '<tr class="empty-row"><td colspan="4"><div class="empty-inline"><svg class="empty-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5"/></svg><span>暂无错误</span></div></td></tr>'}</tbody></table></div>`;
 }
 function renderModels(s){
   const models=((s.catalogue||{}).models||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
@@ -1772,7 +1846,7 @@ function renderModels(s){
       <td>${esc(params)}</td>
       <td>${isDefault?'<span class="muted">默认</span>':`<button type="button" class="btn btn-ghost" onclick="setDefault('${esc(m.id)}')">设为默认</button>`}</td>
     </tr>`;
-  }).join('')||'<tr class="empty-row"><td colspan="6">暂无模型</td></tr>';
+  }).join('')||'<tr class="empty-row"><td colspan="6"><div class="empty-inline"><svg class="empty-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5"/></svg><span>暂无模型</span></div></td></tr>';
   const chatSel=document.getElementById('pgChatModel');
   const imgSel=document.getElementById('pgImgModel');
   const chatModels=models.filter(m=>m.enabled && ((m.capabilities||[]).includes('chat') || !(m.capabilities||[]).includes('image_generation')));
@@ -1786,7 +1860,7 @@ function renderKeys(s){
     <td>${esc(k.name||'—')}</td><td><code>${esc(k.key_preview||'')}</code></td>
     <td>${k.created_at? new Date(k.created_at*1000).toLocaleString():'—'}</td>
     <td><button type="button" class="btn btn-danger" onclick="revokeKey('${esc(k.id)}')">吊销</button></td>
-  </tr>`).join('') : '<tr class="empty-row"><td colspan="4">暂无客户端密钥</td></tr>';
+  </tr>`).join('') : '<tr class="empty-row"><td colspan="4"><div class="empty-inline"><svg class="empty-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5"/></svg><span>暂无客户端密钥</span></div></td></tr>';
 }
 function renderAudits(s){
   const audits=s.audits||[];
@@ -1799,7 +1873,7 @@ function renderAudits(s){
       <td class="${(e.status||0)>=400?'bad':'ok'}">${e.status||''}</td>
       <td>${tokS}</td><td>${e.retried? esc(e.retry_reason||'是'):'—'}</td>
       <td class="bad">${esc(e.error||'')}</td></tr>`;
-  }).join('') : '<tr class="empty-row"><td colspan="7">暂无记录</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="7"><div class="empty-inline"><svg class="empty-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5"/></svg><span>暂无记录</span></div></td></tr>';
 }
 function renderSettings(s){
   document.getElementById('settingsCard').innerHTML=`<div class="panel-title">运行设置（只读）</div>
@@ -1903,7 +1977,7 @@ async function loadMedia(){
   if(!r.ok){box.innerHTML='<div class="bad">加载失败</div>';return;}
   const data=await r.json();
   const items=data.items||[];
-  if(!items.length){box.innerHTML='<div class="muted">暂无生成图片</div>';return;}
+  if(!items.length){box.innerHTML='<div class="empty-block"><svg class="empty-ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M5.5 8h5"/></svg><span>暂无生成图片</span></div>';return;}
   box.innerHTML=items.map(it=>`<div class="thumb">
     <a href="/media/${esc(it.id)}" target="_blank" rel="noopener"><img src="/media/${esc(it.id)}" alt="${esc(it.prompt||it.id)}"/></a>
     <div class="meta">

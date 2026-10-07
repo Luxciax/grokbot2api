@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.13
+
+### Polish
+- Shell + admin: replace `nav-dot` placeholders with consistent 16×16 stroke SVG icons; brand mark (G/bridge) on accent tile.
+- Settings drawer close, gateway start/stop, admin refresh/logout/external links get quiet icons (text retained where needed).
+- Restyle `/admin/login` to the same quiet light/dark tokens (no blue neon); focus states + Enter to submit.
+- Empty table/gallery states: short line + muted icon instead of bare “暂无…” walls.
+- Offline workbench empty state: muted offline icon.
+- Docs: `desktop/docs/ui-design-brief.md` — why the old UI felt like a demo, what fixed it, and a copy-paste prompt for the next AI UI pass.
+
 ## 0.3.12
 
 ### Admin workbench redesign

@@ -115,8 +115,16 @@ button {
   height: 18px;
   border-radius: 4px;
   background: var(--accent);
-  opacity: 0.85;
+  color: var(--accent-fg);
+  opacity: 0.95;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-mark svg {
+  display: block;
 }
 
 .brand-text {
@@ -174,16 +182,20 @@ button {
   font-weight: 500;
 }
 
-.nav-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: transparent;
+.nav-ico {
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+  color: var(--text-muted);
+  display: block;
 }
 
-.nav-item.active .nav-dot {
-  background: var(--accent);
+.nav-item:hover .nav-ico {
+  color: var(--text-secondary);
+}
+
+.nav-item.active .nav-ico {
+  color: var(--accent);
 }
 
 .sidebar-foot {
@@ -363,6 +375,22 @@ button {
   font-size: 11px;
 }
 
+.btn-ico {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.btn-ico.btn-sm {
+  width: 24px;
+  height: 24px;
+}
+
+.btn-ico svg {
+  display: block;
+}
+
 /* ——— Overview ——— */
 .overview-list {
   border: 1px solid var(--border);
@@ -464,6 +492,12 @@ button {
   margin: 40px auto;
   text-align: left;
   gap: 8px;
+}
+
+.empty-ico {
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-bottom: 4px;
 }
 
 .empty-title {

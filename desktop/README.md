@@ -83,3 +83,7 @@ cargo test -- --nocapture
 ## 版本
 
 与仓库网关对齐：`0.3.0`。
+
+## UI
+
+Quiet shell design notes / AI prompt template: [docs/ui-design-brief.md](docs/ui-design-brief.md).
