@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GrokBot2API — UI Prototype v1</title>
+  <style>
+    :root {
+      --bg: #0c0c0d;
+      --bg-elevated: #121214;
+      --bg-hover: #1a1a1d;
+      --bg-active: #1e1e22;
+      --border: #232326;
+      --border-strong: #2e2e33;
+      --text: #ececef;
+      --text-secondary: #a0a0a8;
+      --text-muted: #6b6b74;
+      --accent: #3d9a6a;
+      --accent-muted: rgba(61, 154, 106, 0.15);
+      --accent-hover: #48ad78;
+      --danger: #c45c5c;
+      --danger-muted: rgba(196, 92, 92, 0.12);
+      --warn: #b8923a;
+      --sidebar-w: 180px;
+      --radius-sm: 4px;
+      --radius: 6px;
+      --radius-lg: 8px;
+      --font: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+      --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.45);
+      --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+
+    /* ——— Shell layout ——— */
+    .shell {
+      display: flex;
+      height: 100%;
+    }
+
+    /* ——— Sidebar ——— */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+      user-select: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 16px 12px;
+    }
+
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: var(--accent);
+      opacity: 0.85;
+      flex-shrink: 0;
+    }
+
+    .brand-text {
+      font-size: 13px;
+      font-weight: 560;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .brand-ver {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .nav {
+      flex: 1;
+      padding: 4px 8px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .nav-section {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 12px 8px 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: var(--radius);
+      color: var(--text-secondary);
+      font-size: 13px;
+      text-align: left;
+      transition: background 0.1s, color 0.1s;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .nav-item.active {
+      background: var(--bg-active);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .nav-item.disabled {
+      opacity: 0.4;
+    }
+
+    .nav-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: transparent;
+      flex-shrink: 0;
+    }
+
+    .nav-item.active .nav-dot {
+      background: var(--accent);
+    }
+
+    .sidebar-foot {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .gw-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 2px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .status-dot.on {
+      background: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-muted);
+    }
+
+    .status-dot.starting {
+      background: var(--warn);
+    }
+
+    .gw-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .gw-label {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .gw-url {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .sidebar-actions .btn {
+      flex: 1;
+    }
+
+    /* ——— Main ——— */
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-elevated);
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px 0;
+      min-height: 48px;
+    }
+
+    .page-title {
+      font-size: 15px;
+      font-weight: 560;
+      letter-spacing: -0.02em;
+    }
+
+    .page-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .page-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .page-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px 24px;
+    }
+
+    /* ——— Buttons ——— */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.12s, border-color 0.12s, color 0.12s, opacity 0.12s;
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0a0a;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border-strong);
+      color: var(--text-secondary);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--bg-hover);
+      color: var(--text);
+      border-color: #3a3a40;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      height: 28px;
+      padding: 0 8px;
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--danger-muted);
+    }
+
+    .btn-sm {
+      height: 24px;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+
+    /* ——— Overview ——— */
+    .overview-list {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .ov-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ov-row:last-child {
+      border-bottom: none;
+    }
+
+    .ov-key {
+      width: 56px;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .ov-val {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ov-title {
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ov-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: var(--mono);
+    }
+
+    .ov-detail.plain {
+      font-family: inherit;
+    }
+
+    .pill-quiet {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: var(--bg-hover);
+      font-weight: 400;
+    }
+
+    .pill-quiet.ok {
+      color: var(--accent);
+      background: var(--accent-muted);
+    }
+
+    .pill-quiet.warn {
+      color: var(--warn);
+      background: rgba(184, 146, 58, 0.12);
+    }
+
+    /* ——— Stats strip ——— */
+    .stats {
+      display: flex;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .stat {
+      flex: 1;
+      background: var(--bg);
+      padding: 12px 16px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 560;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ——— Tables / lists ——— */
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    table.data th {
+      text-align: left;
+      font-weight: 500;
+      color: var(--text-muted);
+      font-size: 11px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+    }
+
+    table.data td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+
+    table.data tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.data tr:hover td {
+      background: var(--bg-hover);
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .activity-list {
+      list-style: none;
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      width: 52px;
+      flex-shrink: 0;
+    }
+
+    .activity-text {
+      flex: 1;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .activity-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* ——— Empty state ——— */
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      min-height: 280px;
+      max-width: 360px;
+      margin: 40px auto;
+      text-align: left;
+      gap: 8px;
+    }
+
+    .empty-title {
+      font-size: 15px;
+      font-weight: 560;
+    }
+
+    .empty-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* ——— Credentials stepper ——— */
+    .stepper {
+      max-width: 480px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 0 12px;
+      padding-bottom: 4px;
+    }
+
+    .step-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg);
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .step.done .step-num {
+      border-color: var(--accent);
+      background: var(--accent-muted);
+      color: var(--accent);
+    }
+
+    .step.active .step-num {
+      border-color: var(--text-secondary);
+      color: var(--text);
+    }
+
+    .step-line {
+      flex: 1;
+      width: 1px;
+      background: var(--border);
+      margin: 4px 0;
+      min-height: 12px;
+    }
+
+    .step:last-child .step-line {
+      display: none;
+    }
+
+    .step-body {
+      padding-bottom: 20px;
+      min-width: 0;
+    }
+
+    .step-title {
+      font-size: 13px;
+      font-weight: 500;
+      padding-top: 2px;
+      margin-bottom: 4px;
+    }
+
+    .step-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .step-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 8px 10px;
+      border-left: 2px solid var(--border-strong);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .field label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .field input,
+    .field textarea {
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 7px 10px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.12s;
+      width: 100%;
+    }
+
+    .field textarea {
+      min-height: 72px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: #4a4a52;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .step-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    /* ——— Settings drawer ——— */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+      z-index: 40;
+    }
+
+    .overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      max-width: 100%;
+      height: 100%;
+      background: var(--bg-elevated);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow-drawer);
+      z-index: 50;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .drawer-title {
+      font-size: 15px;
+      font-weight: 560;
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .drawer-foot {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .field-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: -2px;
+    }
+
+    /* ——— Toast ——— */
+    .toast-host {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--bg-active);
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-toast);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: auto;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ——— Hidden views ——— */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .hidden { display: none !important; }
+
+    /* scrollbar */
+    .page-body::-webkit-scrollbar,
+    .drawer-body::-webkit-scrollbar,
+    .nav::-webkit-scrollbar {
+      width: 8px;
+    }
+    .page-body::-webkit-scrollbar-thumb,
+    .drawer-body::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <span class="brand-text">GrokBot2API</span>
+        <span class="brand-ver">0.3.3</span>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-nav="overview" type="button">
+          <span class="nav-dot"></span>总览
+        </button>
+        <button class="nav-item" data-nav="workbench" type="button">
+          <span class="nav-dot"></span>工作台
+        </button>
+        <button class="nav-item" data-nav="models" type="button">
+          <span class="nav-dot"></span>模型
+        </button>
+        <button class="nav-item" data-nav="keys" type="button">
+          <span class="nav-dot"></span>密钥
+        </button>
+        <button class="nav-item" data-nav="audits" type="button">
+          <span class="nav-dot"></span>审计
+        </button>
+        <button class="nav-item" data-nav="media" type="button">
+          <span class="nav-dot"></span>媒体
+        </button>
+        <button class="nav-item" data-nav="playground" type="button">
+          <span class="nav-dot"></span>试用
+        </button>
+        <div class="nav-section">配置</div>
+        <button class="nav-item" data-nav="setup" type="button">
+          <span class="nav-dot"></span>凭证
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="gw-status">
+          <span class="status-dot" id="statusDot"></span>
+          <div class="gw-meta">
+            <div class="gw-label" id="statusLabel">已停止</div>
+            <div class="gw-url" id="statusUrl">127.0.0.1:8787</div>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <button class="btn btn-primary btn-sm" id="btnToggleGw" type="button">启动</button>
+          <button class="btn btn-secondary btn-sm" id="btnSettings" type="button" title="设置">设置</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Overview -->
+      <section class="view active" id="view-overview" data-needs-gw="false">
+        <div class="page-header">
+          <div>
+            <div class="page-title">总览</div>
+            <div class="page-sub">本机网关与凭证状态</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="overview-list">
+            <div class="ov-row">
+              <div class="ov-key">网关</div>
+              <div class="ov-val">
+                <div class="ov-title">
+                  <span id="ovGwTitle">已停止</span>
+                  <span class="pill-quiet" id="ovGwPill">离线</span>
+                </div>
+                <div class="ov-detail" id="ovGwDetail">127.0.0.1:8787</div>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="ovGwAction" type="button">启动</button>
+            </div>
+            <div class="ov-row">
+              <div class="ov-key">凭证</div>
+              <div class="ov-val">
+                <div class="ov-title">
+                  <span id="ovCredTitle">未完成</span>
+                  <span class="pill-quiet warn" id="ovCredPill">缺 sbi_</span>
+                </div>
+                <div class="ov-detail plain" id="ovCredDetail">导入会话后粘贴续期凭证</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" id="ovCredAction" type="button">去配置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Workbench -->
+      <section class="view" id="view-workbench" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">工作台</div>
+            <div class="page-sub">请求概览与最近活动</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="stats">
+              <div class="stat">
+                <div class="stat-label">今日请求</div>
+                <div class="stat-value">128</div>
+                <div class="stat-hint">较昨日 +12%</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">活跃密钥</div>
+                <div class="stat-value">3</div>
+                <div class="stat-hint">共 5 把</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">平均延迟</div>
+                <div class="stat-value">420<span style="font-size:13px;color:var(--text-muted)">ms</span></div>
+                <div class="stat-hint">P50</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">错误率</div>
+                <div class="stat-value">0.8<span style="font-size:13px;color:var(--text-muted)">%</span></div>
+                <div class="stat-hint">近 24h</div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <span class="panel-title">最近活动</span>
+              </div>
+              <ul class="activity-list">
+                <li class="activity-item">
+                  <span class="activity-time">18:24</span>
+                  <span class="activity-text">chat.completions · grok-4</span>
+                  <span class="activity-tag">200 · 1.2s</span>
+                </li>
+                <li class="activity-item">
+                  <span class="activity-time">18:21</span>
+                  <span class="activity-text">images.generations · flux</span>
+                  <span class="activity-tag">200 · 4.8s</span>
+                </li>
+                <li class="activity-item">
+                  <span class="activity-time">18:19</span>
+                  <span class="activity-text">models.list</span>
+                  <span class="activity-tag">200 · 42ms</span>
+                </li>
+                <li class="activity-item">
+                  <span class="activity-time">18:12</span>
+                  <span class="activity-text">chat.completions · grok-3-mini</span>
+                  <span class="activity-tag">429 · rate limit</span>
+                </li>
+                <li class="activity-item">
+                  <span class="activity-time">17:58</span>
+                  <span class="activity-text">凭证续期成功</span>
+                  <span class="activity-tag">sbi_ · 自动</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后即可查看请求与活动。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Models -->
+      <section class="view" id="view-models" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">模型</div>
+            <div class="page-sub">上游可用模型</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="panel">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>类型</th>
+                    <th>上下文</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono">grok-4</td>
+                    <td>chat</td>
+                    <td>128k</td>
+                    <td><span class="pill-quiet ok">可用</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mono">grok-3</td>
+                    <td>chat</td>
+                    <td>128k</td>
+                    <td><span class="pill-quiet ok">可用</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mono">grok-3-mini</td>
+                    <td>chat</td>
+                    <td>128k</td>
+                    <td><span class="pill-quiet ok">可用</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mono">flux</td>
+                    <td>image</td>
+                    <td>—</td>
+                    <td><span class="pill-quiet ok">可用</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后加载模型列表。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Keys -->
+      <section class="view" id="view-keys" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">密钥</div>
+            <div class="page-sub">对外 API Key</div>
+          </div>
+          <div class="page-actions content-when-running">
+            <button class="btn btn-secondary btn-sm" type="button" id="btnNewKey">新建</button>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="panel">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    <th>前缀</th>
+                    <th>用量</th>
+                    <th>创建时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>default</td>
+                    <td class="mono">sk-gb_a1…</td>
+                    <td>84 / ∞</td>
+                    <td class="mono">2026-09-12</td>
+                  </tr>
+                  <tr>
+                    <td>ci-bot</td>
+                    <td class="mono">sk-gb_c9…</td>
+                    <td>12 / 1k</td>
+                    <td class="mono">2026-10-01</td>
+                  </tr>
+                  <tr>
+                    <td>local-dev</td>
+                    <td class="mono">sk-gb_e2…</td>
+                    <td>320 / ∞</td>
+                    <td class="mono">2026-08-20</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后管理 API 密钥。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Audits -->
+      <section class="view" id="view-audits" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">审计</div>
+            <div class="page-sub">近期请求记录</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="panel">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>方法</th>
+                    <th>路径</th>
+                    <th>状态</th>
+                    <th>耗时</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono">18:24:11</td>
+                    <td>POST</td>
+                    <td class="mono">/v1/chat/completions</td>
+                    <td>200</td>
+                    <td class="mono">1.24s</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">18:21:03</td>
+                    <td>POST</td>
+                    <td class="mono">/v1/images/generations</td>
+                    <td>200</td>
+                    <td class="mono">4.81s</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">18:19:44</td>
+                    <td>GET</td>
+                    <td class="mono">/v1/models</td>
+                    <td>200</td>
+                    <td class="mono">42ms</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">18:12:09</td>
+                    <td>POST</td>
+                    <td class="mono">/v1/chat/completions</td>
+                    <td>429</td>
+                    <td class="mono">18ms</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后查看审计日志。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Media -->
+      <section class="view" id="view-media" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">媒体</div>
+            <div class="page-sub">生成资源</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="panel">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>文件</th>
+                    <th>类型</th>
+                    <th>大小</th>
+                    <th>时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono">img_8f2a.png</td>
+                    <td>image/png</td>
+                    <td>1.2 MB</td>
+                    <td class="mono">今天 18:21</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">img_3c91.png</td>
+                    <td>image/png</td>
+                    <td>980 KB</td>
+                    <td class="mono">今天 15:04</td>
+                  </tr>
+                  <tr>
+                    <td class="mono">aud_11b0.mp3</td>
+                    <td>audio/mpeg</td>
+                    <td>340 KB</td>
+                    <td class="mono">昨天 22:18</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后浏览媒体文件。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Playground -->
+      <section class="view" id="view-playground" data-needs-gw="true">
+        <div class="page-header">
+          <div>
+            <div class="page-title">试用</div>
+            <div class="page-sub">快速对话测试</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <div class="content-when-running">
+            <div class="panel" style="padding: 14px;">
+              <div class="field">
+                <label>模型</label>
+                <input type="text" value="grok-4" readonly />
+              </div>
+              <div class="field">
+                <label>消息</label>
+                <textarea placeholder="输入一条测试消息…"></textarea>
+              </div>
+              <div class="step-actions">
+                <button class="btn btn-primary" type="button" id="btnPlaySend">发送</button>
+                <button class="btn btn-ghost" type="button">清空</button>
+              </div>
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">响应</div>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+                  （发送后显示 mock 回复）
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="empty content-when-stopped hidden">
+            <div class="empty-title">网关未运行</div>
+            <div class="empty-desc">启动后试用对话接口。</div>
+            <button class="btn btn-primary empty-start" type="button">启动网关</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Credentials -->
+      <section class="view" id="view-setup" data-needs-gw="false">
+        <div class="page-header">
+          <div>
+            <div class="page-title">凭证</div>
+            <div class="page-sub">接入 Grok Bot 会话与续期</div>
+          </div>
+        </div>
+        <div class="page-body">
+          <p class="step-note">会话 JWT 与 sbi_ 续期凭证不是同一种东西。导入会话后，再粘贴 sbi_ 才能自动续期。</p>
+
+          <div class="stepper" id="stepper">
+            <!-- Step 1 -->
+            <div class="step active" data-step="1">
+              <div class="step-rail">
+                <div class="step-num">1</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">导入 Grok Bot 会话</div>
+                <div class="step-hint">粘贴浏览器导出的会话 Cookie / JWT。</div>
+                <div class="field">
+                  <label>会话内容</label>
+                  <textarea id="credSession" placeholder="粘贴会话 JWT 或 Cookie…"></textarea>
+                </div>
+                <div class="step-actions">
+                  <button class="btn btn-primary" type="button" data-complete-step="1">导入</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step" data-step="2">
+              <div class="step-rail">
+                <div class="step-num">2</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">粘贴 sbi_ 续期凭证</div>
+                <div class="step-hint">用于会话过期后自动续期。</div>
+                <div class="field">
+                  <label>sbi_ 凭证</label>
+                  <input type="text" id="credSbi" placeholder="sbi_…" autocomplete="off" />
+                </div>
+                <div class="step-actions">
+                  <button class="btn btn-primary" type="button" data-complete-step="2" disabled>保存</button>
+                  <button class="btn btn-ghost" type="button" data-skip-step="2">跳过</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step" data-step="3">
+              <div class="step-rail">
+                <div class="step-num">3</div>
+                <div class="step-line"></div>
+              </div>
+              <div class="step-body">
+                <div class="step-title">可选：创建对外 API Key</div>
+                <div class="step-hint">给客户端用的 sk- 密钥，可稍后在「密钥」里创建。</div>
+                <div class="field">
+                  <label>名称</label>
+                  <input type="text" id="credKeyName" placeholder="default" />
+                </div>
+                <div class="step-actions">
+                  <button class="btn btn-primary" type="button" id="btnFinishSetup">完成</button>
+                  <button class="btn btn-ghost" type="button" id="btnSkipKey">跳过并完成</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings drawer -->
+  <div class="overlay" id="settingsOverlay"></div>
+  <aside class="drawer" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="drawer-head">
+      <div class="drawer-title" id="settingsTitle">设置</div>
+      <button class="btn btn-ghost btn-sm" id="btnCloseSettings" type="button" aria-label="关闭">关闭</button>
+    </div>
+    <div class="drawer-body">
+      <div class="field">
+        <label for="setHost">Host</label>
+        <input id="setHost" type="text" value="127.0.0.1" />
+      </div>
+      <div class="field">
+        <label for="setPort">Port</label>
+        <input id="setPort" type="number" value="8787" />
+        <div class="field-hint">改端口需重启网关</div>
+      </div>
+      <div class="field">
+        <label for="setMachine">Machine ID</label>
+        <input id="setMachine" type="text" value="d44e1d3d-04e5-43e7-b2b1-b3015c0b867c" class="mono" style="font-size:11px;" />
+        <div class="field-hint">可选，用于多机区分</div>
+      </div>
+    </div>
+    <div class="drawer-foot">
+      <button class="btn btn-ghost" id="btnCancelSettings" type="button">取消</button>
+      <button class="btn btn-primary" id="btnSaveSettings" type="button">保存</button>
+    </div>
+  </aside>
+
+  <div class="toast-host" id="toastHost"></div>
+
+  <script>
+    (function () {
+      const ADMIN_NAV = new Set([
+        "workbench", "models", "keys", "audits", "media", "playground",
+      ]);
+
+      const state = {
+        nav: "overview",
+        running: false,
+        starting: false,
+        host: "127.0.0.1",
+        port: 8787,
+        machineId: "d44e1d3d-04e5-43e7-b2b1-b3015c0b867c",
+        cred: {
+          session: false,
+          sbi: false,
+          key: false,
+          onboarded: false,
+          step: 1,
+        },
+      };
+
+      const $ = (sel, root = document) => root.querySelector(sel);
+      const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+      /* ——— Toast ——— */
+      function toast(msg) {
+        const host = $("#toastHost");
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.textContent = msg;
+        host.appendChild(el);
+        requestAnimationFrame(() => el.classList.add("show"));
+        setTimeout(() => {
+          el.classList.remove("show");
+          setTimeout(() => el.remove(), 220);
+        }, 3000);
+      }
+
+      /* ——— Gateway ——— */
+      function gwUrl() {
+        return `${state.host}:${state.port}`;
+      }
+
+      function setRunning(next) {
+        if (next === state.running) return;
+        if (next) {
+          state.starting = true;
+          renderGateway();
+          setTimeout(() => {
+            state.starting = false;
+            state.running = true;
+            renderGateway();
+            renderViews();
+            toast("网关已启动");
+          }, 700);
+        } else {
+          state.running = false;
+          state.starting = false;
+          renderGateway();
+          renderViews();
+          toast("网关已停止");
+        }
+      }
+
+      function toggleGateway() {
+        if (state.starting) return;
+        setRunning(!state.running);
+      }
+
+      function renderGateway() {
+        const dot = $("#statusDot");
+        const label = $("#statusLabel");
+        const url = $("#statusUrl");
+        const btn = $("#btnToggleGw");
+        const ovTitle = $("#ovGwTitle");
+        const ovPill = $("#ovGwPill");
+        const ovDetail = $("#ovGwDetail");
+        const ovAction = $("#ovGwAction");
+
+        url.textContent = gwUrl();
+        ovDetail.textContent = gwUrl();
+
+        dot.classList.remove("on", "starting");
+        if (state.starting) {
+          dot.classList.add("starting");
+          label.textContent = "启动中…";
+          btn.textContent = "启动中";
+          btn.disabled = true;
+          btn.className = "btn btn-primary btn-sm";
+          ovTitle.textContent = "启动中…";
+          ovPill.textContent = "启动中";
+          ovPill.className = "pill-quiet warn";
+          ovAction.textContent = "…";
+          ovAction.disabled = true;
+        } else if (state.running) {
+          dot.classList.add("on");
+          label.textContent = "运行中";
+          btn.textContent = "停止";
+          btn.disabled = false;
+          btn.className = "btn btn-secondary btn-sm";
+          ovTitle.textContent = "运行中";
+          ovPill.textContent = "在线";
+          ovPill.className = "pill-quiet ok";
+          ovAction.textContent = "停止";
+          ovAction.disabled = false;
+          ovAction.className = "btn btn-secondary btn-sm";
+        } else {
+          label.textContent = "已停止";
+          btn.textContent = "启动";
+          btn.disabled = false;
+          btn.className = "btn btn-primary btn-sm";
+          ovTitle.textContent = "已停止";
+          ovPill.textContent = "离线";
+          ovPill.className = "pill-quiet";
+          ovAction.textContent = "启动";
+          ovAction.disabled = false;
+          ovAction.className = "btn btn-secondary btn-sm";
+        }
+
+        // credential overview
+        const cTitle = $("#ovCredTitle");
+        const cPill = $("#ovCredPill");
+        const cDetail = $("#ovCredDetail");
+        if (state.cred.session && state.cred.sbi) {
+          cTitle.textContent = "已配置";
+          cPill.textContent = "齐全";
+          cPill.className = "pill-quiet ok";
+          cDetail.textContent = "会话 + sbi_ 续期";
+        } else if (state.cred.session && !state.cred.sbi) {
+          cTitle.textContent = "部分配置";
+          cPill.textContent = "缺 sbi_";
+          cPill.className = "pill-quiet warn";
+          cDetail.textContent = "已有会话，建议补齐续期凭证";
+        } else {
+          cTitle.textContent = "未完成";
+          cPill.textContent = "缺 sbi_";
+          cPill.className = "pill-quiet warn";
+          cDetail.textContent = "导入会话后粘贴续期凭证";
+        }
+      }
+
+      /* ——— Navigation ——— */
+      function navigate(id, pushHash = true) {
+        if (!id || !$("#view-" + id)) id = "overview";
+        state.nav = id;
+        $$(".nav-item").forEach((el) => {
+          el.classList.toggle("active", el.dataset.nav === id);
+        });
+        $$(".view").forEach((el) => {
+          el.classList.toggle("active", el.id === "view-" + id);
+        });
+        if (pushHash) {
+          const hash = "#" + id;
+          if (location.hash !== hash) {
+            history.replaceState(null, "", hash);
+          }
+        }
+        renderViews();
+      }
+
+      function renderViews() {
+        $$(".view").forEach((view) => {
+          const needs = view.dataset.needsGw === "true";
+          const runningBlocks = $$(".content-when-running", view);
+          const stoppedBlocks = $$(".content-when-stopped", view);
+          if (!needs) return;
+          const showRunning = state.running;
+          runningBlocks.forEach((el) => el.classList.toggle("hidden", !showRunning));
+          stoppedBlocks.forEach((el) => el.classList.toggle("hidden", showRunning));
+        });
+      }
+
+      /* ——— Credentials ——— */
+      function setStep(n) {
+        state.cred.step = n;
+        $$(".step").forEach((el) => {
+          const s = Number(el.dataset.step);
+          el.classList.toggle("active", s === n);
+          el.classList.toggle("done", s < n || (s === 3 && state.cred.onboarded));
+          if (state.cred.onboarded && s <= 3) el.classList.add("done");
+        });
+        // enable step 2 save when sbi typed
+        const sbiBtn = $('[data-complete-step="2"]');
+        if (sbiBtn) sbiBtn.disabled = !($("#credSbi").value || "").startsWith("sbi_");
+      }
+
+      function completeStep(n) {
+        if (n === 1) {
+          const v = ($("#credSession").value || "").trim();
+          if (!v) {
+            toast("请粘贴会话内容");
+            return;
+          }
+          state.cred.session = true;
+          toast("会话已导入");
+          setStep(2);
+          renderGateway();
+        } else if (n === 2) {
+          const v = ($("#credSbi").value || "").trim();
+          if (!v.startsWith("sbi_")) {
+            toast("请粘贴 sbi_ 开头的凭证");
+            return;
+          }
+          state.cred.sbi = true;
+          toast("续期凭证已保存");
+          setStep(3);
+          renderGateway();
+        }
+      }
+
+      function finishSetup(withKey) {
+        if (withKey) {
+          const name = ($("#credKeyName").value || "").trim() || "default";
+          state.cred.key = true;
+          toast("已创建密钥「" + name + "」");
+        } else {
+          toast("凭证配置完成");
+        }
+        state.cred.onboarded = true;
+        setStep(3);
+        renderGateway();
+        navigate("workbench");
+      }
+
+      /* ——— Settings drawer ——— */
+      function openSettings() {
+        $("#setHost").value = state.host;
+        $("#setPort").value = String(state.port);
+        $("#setMachine").value = state.machineId;
+        $("#settingsOverlay").classList.add("open");
+        $("#settingsDrawer").classList.add("open");
+        setTimeout(() => $("#setHost").focus(), 50);
+      }
+
+      function closeSettings() {
+        $("#settingsOverlay").classList.remove("open");
+        $("#settingsDrawer").classList.remove("open");
+      }
+
+      function saveSettings() {
+        const host = ($("#setHost").value || "").trim() || "127.0.0.1";
+        const port = Number($("#setPort").value) || 8787;
+        const machineId = ($("#setMachine").value || "").trim();
+        const portChanged = port !== state.port;
+        state.host = host;
+        state.port = port;
+        state.machineId = machineId;
+        renderGateway();
+        closeSettings();
+        if (portChanged && state.running) {
+          toast("已保存 · 改端口需重启网关");
+        } else {
+          toast("设置已保存");
+        }
+      }
+
+      /* ——— Wire up ——— */
+      $$(".nav-item").forEach((el) => {
+        el.addEventListener("click", () => navigate(el.dataset.nav));
+      });
+
+      $("#btnToggleGw").addEventListener("click", toggleGateway);
+      $("#ovGwAction").addEventListener("click", toggleGateway);
+      $("#ovCredAction").addEventListener("click", () => navigate("setup"));
+
+      $$(".empty-start").forEach((btn) => {
+        btn.addEventListener("click", () => setRunning(true));
+      });
+
+      $("#btnSettings").addEventListener("click", openSettings);
+      $("#btnCloseSettings").addEventListener("click", closeSettings);
+      $("#btnCancelSettings").addEventListener("click", closeSettings);
+      $("#settingsOverlay").addEventListener("click", closeSettings);
+      $("#btnSaveSettings").addEventListener("click", saveSettings);
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeSettings();
+      });
+
+      $$("[data-complete-step]").forEach((btn) => {
+        btn.addEventListener("click", () => completeStep(Number(btn.dataset.completeStep)));
+      });
+
+      $('[data-skip-step="2"]').addEventListener("click", () => {
+        toast("已跳过续期凭证");
+        setStep(3);
+      });
+
+      $("#credSbi").addEventListener("input", () => {
+        const btn = $('[data-complete-step="2"]');
+        btn.disabled = !($("#credSbi").value || "").startsWith("sbi_");
+      });
+
+      $("#btnFinishSetup").addEventListener("click", () => finishSetup(true));
+      $("#btnSkipKey").addEventListener("click", () => finishSetup(false));
+
+      $("#btnNewKey").addEventListener("click", () => toast("（原型）新建密钥"));
+      $("#btnPlaySend").addEventListener("click", () => toast("（原型）已发送"));
+
+      // hash routing
+      function fromHash() {
+        const id = (location.hash || "#overview").slice(1) || "overview";
+        navigate(id, false);
+      }
+      window.addEventListener("hashchange", fromHash);
+
+      // init
+      renderGateway();
+      setStep(1);
+      fromHash();
+    })();
+  </script>
+</body>
+</html>

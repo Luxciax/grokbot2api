@@ -62,4 +62,4 @@ export const NAV_ITEMS: { id: NavId; label: string; hash?: string }[] = [
   { id: "setup", label: "凭证" },
 ];
 
-export const APP_VERSION = "0.3.9";
+export const APP_VERSION = "0.3.10";

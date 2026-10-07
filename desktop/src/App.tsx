@@ -41,8 +41,13 @@ export default function App() {
   const [renewalInput, setRenewalInput] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [iframeKey, setIframeKey] = useState(0);
+  const [setupStep, setSetupStep] = useState(1);
+  const [renewalNoticeDismissed, setRenewalNoticeDismissed] = useState(false);
   /** Only auto-route to setup on the very first credential load — never on poll. */
   const initialNavApplied = useRef(false);
+  const hostInputRef = useRef<HTMLInputElement>(null);
+  const prevAdminBase = useRef<string | null>(null);
+  const lastGatewayErr = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,14 +59,21 @@ export default function App() {
       setStatus(g);
       setCreds(c);
       setSettings(s);
-      // First launch only: land on 凭证 if onboarding unfinished.
-      // Do NOT re-force setup on the 3s poll — that trapped every sidebar click
-      // whenever sbi_ / has_renewal was still missing.
+      // Surface new gateway last_error once via toast (no sticky banner stack).
+      if (g.last_error && g.last_error !== lastGatewayErr.current) {
+        lastGatewayErr.current = g.last_error;
+        setError(`网关：${g.last_error}`);
+      } else if (!g.last_error) {
+        lastGatewayErr.current = null;
+      }
       if (!initialNavApplied.current) {
         initialNavApplied.current = true;
         if (!c.onboarding_done) {
           setNav("setup");
         }
+        if (c.has_renewal) setSetupStep(3);
+        else if (c.has_access_token) setSetupStep(2);
+        else setSetupStep(1);
       }
     } catch (e) {
       setError(formatErr(e));
@@ -74,17 +86,57 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [refresh]);
 
+  // Success toast auto-clear ~3s
+  useEffect(() => {
+    if (!message) return;
+    const t = window.setTimeout(() => setMessage(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [message]);
+
+  // Error toast: slightly longer
+  useEffect(() => {
+    if (!error) return;
+    const t = window.setTimeout(() => setError(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [error]);
+
+  // Esc closes settings; focus host field when opened
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const focusTimer = window.setTimeout(() => hostInputRef.current?.focus(), 50);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(focusTimer);
+    };
+  }, [settingsOpen]);
+
   const running = !!status?.running;
 
-  const adminSrc = useMemo(() => {
+  const adminBase = useMemo(() => {
     if (!running || !status) return null;
+    return status.admin_url.replace(/\/$/, "");
+  }, [running, status]);
+
+  // Remount iframe only when admin base URL changes (port/host), not on section nav
+  useEffect(() => {
+    if (adminBase && prevAdminBase.current && adminBase !== prevAdminBase.current) {
+      setIframeKey((k) => k + 1);
+    }
+    prevAdminBase.current = adminBase;
+  }, [adminBase]);
+
+  const adminSrc = useMemo(() => {
+    if (!adminBase) return null;
+    if (nav === "overview" || nav === "setup") return null;
     const item = NAV_ITEMS.find((n) => n.id === nav);
     const hash = item?.hash;
-    if (nav === "overview" || nav === "setup") return null;
-    const base = status.admin_url.replace(/\/$/, "");
-    if (hash) return `${base}#${hash}`;
-    return base;
-  }, [running, status, nav]);
+    if (hash) return `${adminBase}?embed=1#${hash}`;
+    return `${adminBase}?embed=1`;
+  }, [adminBase, nav]);
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -104,7 +156,9 @@ export default function App() {
     await withBusy(async () => {
       const g = await api.startGateway();
       setStatus(g);
-      setMessage(`网关已启动：${g.base_url}${g.launch_mode ? `（${g.launch_mode}）` : ""}`);
+      setMessage(
+        `网关已启动${g.launch_mode ? ` · ${g.launch_mode}` : ""}`,
+      );
       setIframeKey((k) => k + 1);
       setNav("workbench");
     });
@@ -126,6 +180,13 @@ export default function App() {
       if (result.errors.length) {
         setError(result.errors.join("；"));
       }
+      if (result.has_access_token || result.machine_id) {
+        setSetupStep(2);
+      }
+      if (result.inference_renewal_available) {
+        setSetupStep(3);
+        setRenewalNoticeDismissed(false);
+      }
     });
   }
 
@@ -133,29 +194,22 @@ export default function App() {
     await withBusy(async () => {
       await api.setRenewalCredential(renewalInput);
       setRenewalInput("");
-      setMessage("续期凭证已安全保存（不会回显）");
-      // Stay out of the import trap: after successful sbi_ save, go to 工作台.
-      setNav("workbench");
-    });
-  }
-
-  async function onSaveApiKey() {
-    await withBusy(async () => {
-      await api.setApiKey(apiKeyInput);
-      setApiKeyInput("");
-      setMessage("本地 API Key 已保存");
+      setMessage("续期凭证已保存");
+      setRenewalNoticeDismissed(false);
+      setSetupStep(3);
     });
   }
 
   async function onSaveSettings() {
     if (!settings) return;
+    const portChanged = status?.running && settings.port !== status.port;
     await withBusy(async () => {
       const next = await api.saveSettings({
         ...settings,
         onboarding_done: true,
       });
       setSettings(next);
-      setMessage("设置已保存");
+      setMessage(portChanged ? "已保存 · 改端口需重启网关" : "设置已保存");
       setSettingsOpen(false);
     });
   }
@@ -163,286 +217,452 @@ export default function App() {
   async function finishOnboarding() {
     if (!settings) return;
     await withBusy(async () => {
-      const next = await api.saveSettings({ ...settings, onboarding_done: true });
+      const next = await api.saveSettings({
+        ...settings,
+        onboarding_done: true,
+      });
       setSettings(next);
+      setMessage("凭证配置完成");
       setNav("workbench");
     });
   }
 
-
-  const workbenchSection = NAV_ITEMS.find((n) => n.id === nav);
-  const emptyTitle =
-    nav === "workbench"
-      ? "工作台尚未就绪"
-      : `${workbenchSection?.label ?? "功能页"}尚未就绪`;
-  const emptyBody =
-    nav === "workbench"
-      ? "启动本地网关后，将在此内嵌加载 http://127.0.0.1:<port>/admin。侧栏「模型 / 密钥 / 审计 / 媒体 / 试用」会深链到对应分区。"
-      : `「${workbenchSection?.label ?? nav}」需要本地网关运行后才能打开。可先启动网关，或前往「凭证」检查导入状态。`;
-
   function selectNav(id: NavId) {
     setNav(id);
-    if (id !== "overview" && id !== "setup" && running) {
-      setIframeKey((k) => k + 1);
-    }
+    // Do NOT bump iframeKey — hash-only src change keeps iframe state
   }
+
+  const gwHostPort =
+    status != null
+      ? `${status.host}:${status.port}`
+      : settings
+        ? `${settings.host}:${settings.port}`
+        : "—";
+
+  const sessionReady =
+    !!creds?.has_access_token ||
+    !!importResult?.has_access_token ||
+    !!importResult?.machine_id;
+  const renewalReady = !!creds?.has_renewal;
+
+  const showRenewalNotice =
+    !!creds &&
+    !creds.has_renewal &&
+    !renewalNoticeDismissed &&
+    (nav === "overview" || nav === "setup");
+
+  const toastText = error || message || null;
+  const toastKind = error ? "err" : "info";
+
+  const mainNav = NAV_ITEMS.filter((n) => n.id !== "setup");
+  const setupNav = NAV_ITEMS.find((n) => n.id === "setup");
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="logo-dot" />
-          <div>
-            <div className="brand-title">grokbot2api</div>
-            <div className="brand-sub">v{APP_VERSION} · 工作台</div>
-          </div>
+          <div className="brand-mark" aria-hidden="true" />
+          <span className="brand-text">grokbot2api</span>
+          <span className="brand-ver">v{APP_VERSION}</span>
         </div>
+
         <nav className="nav">
-          {NAV_ITEMS.map((item) => (
+          {mainNav.map((item) => (
             <button
               key={item.id}
               type="button"
               className={`nav-item ${nav === item.id ? "active" : ""}`}
               onClick={() => selectNav(item.id)}
             >
+              <span className="nav-dot" />
               {item.label}
             </button>
           ))}
+          {setupNav && (
+            <>
+              <div className="nav-section">配置</div>
+              <button
+                type="button"
+                className={`nav-item ${nav === setupNav.id ? "active" : ""}`}
+                onClick={() => selectNav(setupNav.id)}
+              >
+                <span className="nav-dot" />
+                {setupNav.label}
+              </button>
+            </>
+          )}
         </nav>
+
         <div className="sidebar-foot">
-          <span className={`badge ${running ? "ok" : "off"}`}>
-            {running ? `运行中 · ${status?.port}` : "已停止"}
-          </span>
+          <div className="gw-status">
+            <span
+              className={`status-dot ${busy && !running ? "busy" : running ? "on" : ""}`}
+            />
+            <div className="gw-meta">
+              <div className="gw-label">
+                {busy && !running ? "启动中…" : running ? "运行中" : "已停止"}
+              </div>
+              <div className="gw-url">{gwHostPort}</div>
+            </div>
+          </div>
           <div className="sidebar-actions">
+            {running ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={busy}
+                onClick={() => void onStop()}
+              >
+                停止
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={busy}
+                onClick={() => void onStart()}
+              >
+                {busy ? "启动中" : "启动"}
+              </button>
+            )}
             <button
-              disabled={busy || running}
-              onClick={() => void onStart()}
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setSettingsOpen(true)}
             >
-              启动
-            </button>
-            <button disabled={busy || !running} onClick={() => void onStop()}>
-              停止
-            </button>
-            <button type="button" className="ghost" onClick={() => setSettingsOpen(true)}>
               设置
             </button>
           </div>
         </div>
       </aside>
 
-      <div className="workspace">
-        <header className="statusbar">
-          <div className="status-left">
-            <strong>
-              {NAV_ITEMS.find((n) => n.id === nav)?.label ?? "工作台"}
-            </strong>
-            {status?.base_url && (
-              <span className="muted mono">{status.base_url}</span>
-            )}
-          </div>
-          <div className="status-right">
-            <span className="muted">
-              续期 {creds?.has_renewal ? "✓" : "✗"} · 会话{" "}
-              {creds?.has_access_token ? "✓" : "—"} · 机号{" "}
-              {creds?.machine_id ? "✓" : "—"}
-            </span>
-          </div>
-        </header>
-
-        {(message || error || status?.last_error || (creds && !creds.has_renewal)) && (
-          <div className="banners">
-            {creds && !creds.has_renewal && (
-              <div className="banner warn">
-                缺少推理续期凭证（sbi_…）。浏览各功能页不受影响；网关可以启动，但推理调用会失败。请到
-                <button
-                  type="button"
-                  className="banner-link"
-                  onClick={() => selectNav("setup")}
-                >
-                  凭证
-                </button>
-                页粘贴保存。会话 JWT 不能替代 sbi_。
+      <main className="main">
+        {nav === "overview" ? (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">总览</div>
+                <div className="page-sub">本机网关与凭证状态</div>
               </div>
-            )}
-            {message && <div className="banner info">{message}</div>}
-            {error && <div className="banner err">{error}</div>}
-            {status?.last_error && (
-              <div className="banner warn">网关：{status.last_error}</div>
-            )}
-          </div>
-        )}
-
-        <main className="main">
-          {nav === "overview" ? (
-            <div className="overview-panel">
-              <h2>总览</h2>
-              <div className="cards">
-                <section className="card">
-                  <h3>网关</h3>
-                  <div className="metric">{running ? "运行中" : "已停止"}</div>
-                  <ul className="kv">
-                    <li>
-                      <span>地址</span>
-                      <code>{status?.base_url ?? "—"}</code>
-                    </li>
-                    <li>
-                      <span>PID</span>
-                      <span>{status?.pid ?? "—"}</span>
-                    </li>
-                    <li>
-                      <span>模式</span>
-                      <span>{status?.launch_mode ?? "—"}</span>
-                    </li>
-                    <li>
-                      <span>版本</span>
-                      <span>v{APP_VERSION}</span>
-                    </li>
-                  </ul>
-                  <div className="row">
+            </div>
+            <div className="page-body">
+              <div className="overview-list">
+                <div className="ov-row">
+                  <div className="ov-key">网关</div>
+                  <div className="ov-val">
+                    <div className="ov-title">
+                      <span>{running ? "运行中" : "已停止"}</span>
+                      <span className={`pill-quiet ${running ? "ok" : ""}`}>
+                        {running ? "在线" : "离线"}
+                      </span>
+                    </div>
+                    <div className="ov-detail">{gwHostPort}</div>
+                    {status?.pid != null && (
+                      <div className="ov-detail plain">
+                        PID {status.pid}
+                        {status.launch_mode ? ` · ${status.launch_mode}` : ""}
+                      </div>
+                    )}
+                  </div>
+                  {running ? (
                     <button
-                      disabled={busy || running}
-                      onClick={() => void onStart()}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={busy}
+                      onClick={() => void onStop()}
                     >
-                      启动网关
-                    </button>
-                    <button disabled={busy || !running} onClick={() => void onStop()}>
                       停止
                     </button>
+                  ) : (
                     <button
-                      disabled={!running}
-                      onClick={() => selectNav("workbench")}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={busy}
+                      onClick={() => void onStart()}
                     >
-                      打开工作台
+                      启动
                     </button>
+                  )}
+                </div>
+                <div className="ov-row">
+                  <div className="ov-key">凭证</div>
+                  <div className="ov-val">
+                    <div className="ov-title">
+                      <span>
+                        {renewalReady && sessionReady
+                          ? "已配置"
+                          : sessionReady
+                            ? "部分配置"
+                            : "未完成"}
+                      </span>
+                      <span
+                        className={`pill-quiet ${renewalReady ? "ok" : "warn"}`}
+                      >
+                        {renewalReady ? "齐全" : "缺 sbi_"}
+                      </span>
+                    </div>
+                    <div className="ov-detail plain">
+                      {renewalReady && sessionReady
+                        ? "会话 + sbi_ 续期"
+                        : sessionReady
+                          ? "已有会话，建议补齐续期凭证"
+                          : "导入会话后粘贴续期凭证"}
+                    </div>
+                    {(creds?.profile_email || creds?.machine_id) && (
+                      <div className="ov-detail plain">
+                        {[creds.profile_email, creds.machine_id]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
                   </div>
-                </section>
-                <section className="card">
-                  <h3>凭证状态</h3>
-                  <ul className="kv">
-                    <li>
-                      <span>推理续期</span>
-                      <span className={creds?.has_renewal ? "ok" : "bad"}>
-                        {creds?.has_renewal ? "已配置" : "缺失"}
-                      </span>
-                    </li>
-                    <li>
-                      <span>会话 access</span>
-                      <span>
-                        {creds?.has_access_token
-                          ? "已导入"
-                          : "本机未存储会话 JWT"}
-                      </span>
-                    </li>
-                    <li>
-                      <span>会话 refresh</span>
-                      <span>
-                        {creds?.has_refresh_token
-                          ? "已导入"
-                          : "本机未存储会话 JWT"}
-                      </span>
-                    </li>
-                    <li>
-                      <span>机号</span>
-                      <code className="truncate">{creds?.machine_id || "—"}</code>
-                    </li>
-                    <li>
-                      <span>邮箱</span>
-                      <span>{creds?.profile_email || "—"}</span>
-                    </li>
-                  </ul>
-                  <p className="muted">{creds?.inference_note}</p>
-                  <button onClick={() => selectNav("setup")}>凭证向导</button>
-                </section>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => selectNav("setup")}
+                  >
+                    去配置
+                  </button>
+                </div>
+              </div>
+
+              {showRenewalNotice && (
+                <div className="inline-notice">
+                  <span>
+                    缺少 sbi_ 续期凭证。网关可启动，但推理会失败。会话 JWT 不能替代
+                    sbi_。
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setRenewalNoticeDismissed(true)}
+                  >
+                    关闭
+                  </button>
+                </div>
+              )}
+
+              {running && (
+                <div style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => selectNav("workbench")}
+                  >
+                    打开工作台 →
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : nav === "setup" ? (
+          <>
+            <div className="page-header">
+              <div>
+                <div className="page-title">凭证</div>
+                <div className="page-sub">接入 Grok Bot 会话与续期</div>
               </div>
             </div>
-          ) : nav === "setup" ? (
-            <div className="setup-panel">
-              <h2>凭证向导</h2>
-              <p className="lead">
-                可从本机 Grok Bot 导入 <strong>机号</strong> 与{" "}
-                <strong>会话 JWT</strong>（Dashboard / 图像用量路径）。
-                sand-secrets <em>通常不含</em> 推理用的{" "}
-                <code>sbi_…</code> 续期凭证；若本地文件中发现会自动写入，否则请手动粘贴。
+            <div className="page-body">
+              <p className="step-note">
+                会话 JWT ≠ sbi_ 续期凭证。导入会话后，再粘贴 sbi_ 才能自动续期。
               </p>
 
-              <section className="card">
-                <h3>1. 从 Grok Bot 导入</h3>
-                <p>
-                  读取 <code>%APPDATA%\Grok Bot\</code>（Local State DPAPI → AES-GCM v10）与{" "}
-                  <code>%USERPROFILE%\.grokbot\</code>。明文令牌不会返回到前端。
-                </p>
-                <button disabled={busy} onClick={() => void onImport()}>
-                  导入 Grok Bot 凭证
-                </button>
-                {importResult && (
-                  <div className="import-result">
-                    <div className="ok-line">{importResult.note}</div>
-                    <div>机号：{importResult.machine_id || "—"}</div>
-                    <div>
-                      access / refresh：
-                      {importResult.has_access_token ? "有" : "本机未存储"} /{" "}
-                      {importResult.has_refresh_token ? "有" : "本机未存储"}
-                    </div>
-                    <div>
-                      续期凭证：
-                      {importResult.inference_renewal_available
-                        ? "已就绪"
-                        : "未发现（请粘贴）"}
-                    </div>
-                    <div>邮箱：{importResult.profile_email || "—"}</div>
-                  </div>
-                )}
-              </section>
-
-              <section className="card">
-                <h3>2. 粘贴推理续期凭证（sbi_…）</h3>
-                <p className="warn-inline">
-                  会话 JWT <em>不能</em> 作为{" "}
-                  <code>SAND_INFERENCE_RENEWAL_CREDENTIAL</code>
-                  。请粘贴 <code>sbi_</code> 开头的续期凭证。
-                </p>
-                <textarea
-                  id="renewal-credential-input"
-                  rows={3}
-                  placeholder="粘贴 sbi_… 续期凭证（保存后不会回显）"
-                  value={renewalInput}
-                  onChange={(e) => setRenewalInput(e.target.value)}
-                />
-                <div className="row">
+              {showRenewalNotice && (
+                <div
+                  className="inline-notice"
+                  style={{ marginBottom: 16, marginTop: 0 }}
+                >
+                  <span>尚未保存 sbi_ 续期凭证，推理调用会失败。</span>
                   <button
-                    disabled={busy || !renewalInput.trim()}
-                    onClick={() => void onSaveRenewal()}
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setRenewalNoticeDismissed(true)}
                   >
-                    保存续期凭证
+                    关闭
                   </button>
-                  <span className="muted">
-                    当前：{creds?.has_renewal ? "已保存" : "未设置"}
-                  </span>
                 </div>
-              </section>
+              )}
 
-              <section className="card">
-                <h3>3. 可选 · 本地代理 API Key</h3>
-                <input
-                  type="password"
-                  placeholder="GROK_BUILD_PROXY_API_KEY（可留空）"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                />
-                <button disabled={busy} onClick={() => void onSaveApiKey()}>
-                  保存 API Key
-                </button>
-              </section>
+              <div className="stepper">
+                <div
+                  className={`step ${setupStep === 1 ? "active" : ""} ${setupStep > 1 || sessionReady ? "done" : ""}`}
+                >
+                  <div className="step-rail">
+                    <div className="step-num">1</div>
+                    <div className="step-line" />
+                  </div>
+                  <div className="step-body">
+                    <div className="step-title">导入 Grok Bot 会话</div>
+                    <div className="step-hint">
+                      读取本机 Grok Bot 机号与会话 JWT（明文不回显）。
+                    </div>
+                    <div className="step-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={busy}
+                        onClick={() => void onImport()}
+                      >
+                        导入
+                      </button>
+                      {sessionReady && (
+                        <span className="field-hint">
+                          {creds?.machine_id
+                            ? "机号已就绪"
+                            : importResult?.machine_id
+                              ? "已导入"
+                              : "已导入会话"}
+                        </span>
+                      )}
+                    </div>
+                    {importResult && (
+                      <div className="import-result">
+                        <div className="ok-line">{importResult.note}</div>
+                        <div>机号：{importResult.machine_id || "—"}</div>
+                        <div>
+                          access / refresh：
+                          {importResult.has_access_token
+                            ? "有"
+                            : "本机未存储"}{" "}
+                          /{" "}
+                          {importResult.has_refresh_token
+                            ? "有"
+                            : "本机未存储"}
+                        </div>
+                        <div>
+                          续期：
+                          {importResult.inference_renewal_available
+                            ? "已就绪"
+                            : "未发现"}
+                        </div>
+                        {importResult.profile_email && (
+                          <div>邮箱：{importResult.profile_email}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-              <section className="card">
-                <button disabled={busy} onClick={() => void finishOnboarding()}>
-                  完成并前往工作台
-                </button>
-              </section>
+                <div
+                  className={`step ${setupStep === 2 ? "active" : ""} ${setupStep > 2 || renewalReady ? "done" : ""}`}
+                >
+                  <div className="step-rail">
+                    <div className="step-num">2</div>
+                    <div className="step-line" />
+                  </div>
+                  <div className="step-body">
+                    <div className="step-title">粘贴 sbi_ 续期凭证</div>
+                    <div className="step-hint">用于会话过期后自动续期。</div>
+                    <div className="field">
+                      <label htmlFor="renewal-credential-input">sbi_ 凭证</label>
+                      <input
+                        id="renewal-credential-input"
+                        type="password"
+                        autoComplete="off"
+                        placeholder="sbi_…"
+                        value={renewalInput}
+                        onChange={(e) => setRenewalInput(e.target.value)}
+                      />
+                    </div>
+                    <div className="step-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={
+                          busy || !renewalInput.trim().startsWith("sbi_")
+                        }
+                        onClick={() => void onSaveRenewal()}
+                      >
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setSetupStep(3);
+                          setMessage("已跳过续期凭证");
+                        }}
+                      >
+                        跳过
+                      </button>
+                      {renewalReady && (
+                        <span className="field-hint">已保存</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className={`step ${setupStep === 3 ? "active" : ""} ${creds?.onboarding_done ? "done" : ""}`}
+                >
+                  <div className="step-rail">
+                    <div className="step-num">3</div>
+                    <div className="step-line" />
+                  </div>
+                  <div className="step-body">
+                    <div className="step-title">可选：本地代理 API Key</div>
+                    <div className="step-hint">
+                      给客户端用的密钥，可稍后在「密钥」里管理。
+                    </div>
+                    <div className="field">
+                      <label htmlFor="api-key-input">API Key</label>
+                      <input
+                        id="api-key-input"
+                        type="password"
+                        autoComplete="off"
+                        placeholder="可留空"
+                        value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                      />
+                    </div>
+                    <div className="step-actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={busy}
+                        onClick={() =>
+                          void withBusy(async () => {
+                            if (!settings) return;
+                            const keyVal = apiKeyInput.trim();
+                            if (keyVal) {
+                              await api.setApiKey(keyVal);
+                              setApiKeyInput("");
+                            }
+                            const next = await api.saveSettings({
+                              ...settings,
+                              onboarding_done: true,
+                            });
+                            setSettings(next);
+                            setMessage(
+                              keyVal
+                                ? "API Key 已保存 · 配置完成"
+                                : "凭证配置完成",
+                            );
+                            setNav("workbench");
+                          })
+                        }
+                      >
+                        完成
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={busy}
+                        onClick={() => void finishOnboarding()}
+                      >
+                        跳过并完成
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="workbench">
-              {running && adminSrc ? (
+          </>
+        ) : (
+          <div className="page-body iframe-bleed">
+            {running && adminSrc ? (
+              <div className="workbench">
                 <iframe
                   key={iframeKey}
                   title="admin-workbench"
@@ -450,104 +670,148 @@ export default function App() {
                   className="admin-frame"
                   allow="clipboard-read; clipboard-write"
                 />
-              ) : (
-                <div className="empty-state">
-                  <h2>{emptyTitle}</h2>
-                  <p>{emptyBody}</p>
-                  <div className="empty-actions">
-                    <button
-                      disabled={busy}
-                      onClick={() => void onStart()}
-                    >
-                      启动网关并打开工作台
-                    </button>
-                    <button onClick={() => selectNav("setup")}>先完成凭证配置</button>
-                  </div>
-                  <ul className="hints">
-                    <li>
-                      续期凭证：{creds?.has_renewal ? "已配置" : "缺失（推理调用需要；启动网关仍可进行）"}
-                    </li>
-                    <li>机号：{creds?.machine_id || "未导入"}</li>
-                    <li>
-                      会话令牌：
-                      {creds?.has_access_token ? "已导入" : "无"}
-                    </li>
-                  </ul>
+              </div>
+            ) : (
+              <div className="empty">
+                <div className="empty-title">网关未运行</div>
+                <div className="empty-desc">
+                  启动后打开「
+                  {NAV_ITEMS.find((n) => n.id === nav)?.label ?? nav}」。
                 </div>
-              )}
-            </div>
-          )}
-        </main>
-      </div>
+                <div className="empty-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() => void onStart()}
+                  >
+                    启动网关
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => selectNav("setup")}
+                  >
+                    配置凭证
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
 
-      {settingsOpen && settings && (
-        <div className="drawer-backdrop" onClick={() => setSettingsOpen(false)}>
-          <aside
-            className="drawer"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="设置"
+      <div
+        className={`overlay ${settingsOpen ? "open" : ""}`}
+        onClick={() => setSettingsOpen(false)}
+      />
+      <aside
+        className={`drawer ${settingsOpen ? "open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settingsTitle"
+      >
+        <div className="drawer-head">
+          <div className="drawer-title" id="settingsTitle">
+            设置
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            aria-label="关闭"
+            onClick={() => setSettingsOpen(false)}
           >
-            <h2>设置</h2>
-            <label>
-              监听地址
-              <input
-                value={settings.host}
-                onChange={(e) =>
-                  setSettings({ ...settings, host: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              端口
-              <input
-                type="number"
-                value={settings.port}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    port: Number(e.target.value) || 18765,
-                  })
-                }
-              />
-            </label>
-            <label>
-              机号（SAND_MACHINE_ID）
-              <input
-                value={settings.machine_id}
-                onChange={(e) =>
-                  setSettings({ ...settings, machine_id: e.target.value })
-                }
-                placeholder="可从 Grok Bot 导入"
-              />
-            </label>
-            <p className="muted">
-              网关进程会注入已保存的续期凭证、会话令牌、API Key 与机号。修改端口后请重启网关。
-            </p>
-            <div className="row">
-              <button disabled={busy} onClick={() => void onSaveSettings()}>
-                保存
-              </button>
-              <button className="ghost" onClick={() => setSettingsOpen(false)}>
-                关闭
-              </button>
-            </div>
-            <hr />
-            <button
-              className="ghost danger"
-              disabled={busy}
-              onClick={() =>
-                void withBusy(async () => {
-                  await api.clearImportedSession();
-                  setMessage("已清除导入的会话令牌");
-                })
-              }
-            >
-              清除导入的会话令牌
-            </button>
-          </aside>
+            关闭
+          </button>
         </div>
-      )}
+        <div className="drawer-body">
+          {settings && (
+            <>
+              <div className="field">
+                <label htmlFor="setHost">监听地址</label>
+                <input
+                  id="setHost"
+                  ref={hostInputRef}
+                  type="text"
+                  value={settings.host}
+                  onChange={(e) =>
+                    setSettings({ ...settings, host: e.target.value })
+                  }
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="setPort">端口</label>
+                <input
+                  id="setPort"
+                  type="number"
+                  value={settings.port}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      port: Number(e.target.value) || 18765,
+                    })
+                  }
+                />
+                <div className="field-hint">改端口需重启网关</div>
+              </div>
+              <div className="field">
+                <label htmlFor="setMachine">机号（SAND_MACHINE_ID）</label>
+                <input
+                  id="setMachine"
+                  type="text"
+                  className="mono"
+                  value={settings.machine_id}
+                  placeholder="可从 Grok Bot 导入"
+                  onChange={(e) =>
+                    setSettings({ ...settings, machine_id: e.target.value })
+                  }
+                />
+                <div className="field-hint">可选，用于多机区分</div>
+              </div>
+              <div className="drawer-danger">
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void withBusy(async () => {
+                      await api.clearImportedSession();
+                      setMessage("已清除导入的会话令牌");
+                    })
+                  }
+                >
+                  清除导入的会话令牌
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="drawer-foot">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setSettingsOpen(false)}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || !settings}
+            onClick={() => void onSaveSettings()}
+          >
+            保存
+          </button>
+        </div>
+      </aside>
+
+      <div className="toast-host" aria-live="polite">
+        {toastText && (
+          <div className={`toast ${toastKind === "info" ? "" : toastKind}`}>
+            {toastText}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

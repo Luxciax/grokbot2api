@@ -53,7 +53,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.7"
+__version__ = "0.3.10"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -152,6 +152,15 @@ def _extract_upstream_error_code(value: Any) -> str | None:
     return None
 
 
+
+def _agent_strip_tools_enabled() -> bool:
+    """When chat_mode=agent and the client sent tools, strip them and stay on
+    GrokBotService (default True). Set GROKBOT_AGENT_STRIP_TOOLS=0/false/no/off
+    to call InferenceService/Stream instead (accounts that have Stream access).
+    """
+    raw = (os.environ.get("GROKBOT_AGENT_STRIP_TOOLS") or "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
 def _friendly_upstream_code_message(code: str) -> str:
     """Map known Cursor/ai-server error codes to short Chinese messages."""
     if not code:
@@ -159,15 +168,10 @@ def _friendly_upstream_code_message(code: str) -> str:
     code = code.strip()
     mapping = {
         "ERROR_NOT_HIGH_ENOUGH_PERMISSIONS": (
-            "上游拒绝推理（ERROR_NOT_HIGH_ENOUGH_PERMISSIONS / Access denied）："
-            "凭证未过期（token type=grok_bot 可用），/v1/usage 也可返回 hasAvailableUsage，"
-            "但这不等于 InferenceService/Stream 放行。"
-            "实测：官方 Grok Bot 桌面聊天走 GrokBotService.SendGrokBotUserMessage（沙箱 Agent），"
-            "而本网关走 aiserver.v1.InferenceService/Stream；在 SuperGrok + Cursor Free、"
-            "GetHardLimit.noUsageBasedAllowed=true 时，后者会稳定返回 permission_denied。"
-            "对齐 client-version/source/os、packed model id、max_mode 均无法消除该错误。"
-            "请升级 Cursor 付费档（或确认账号具备 Stream 推理权），或等待网关实现 Agent 消息通道。"
-            "这不是 sbi_/JWT 过期。"
+            "上游拒绝 InferenceService/Stream（ERROR_NOT_HIGH_ENOUGH_PERMISSIONS）。"
+            "常见原因：客户端附带了 tools，网关走了 Stream 而非 Agent。"
+            "默认 chat_mode=agent 会剥离 tools；或设 GROKBOT_CHAT_MODE=agent，"
+            "勿设 stream。这不是 sbi_/JWT 过期。"
         ),
         "ERROR_NOT_LOGGED_IN": (
             "上游未登录（ERROR_NOT_LOGGED_IN）：推理令牌无效或已过期，请重新导入/粘贴 sbi_ 续期凭证。"
@@ -180,11 +184,6 @@ def _friendly_upstream_code_message(code: str) -> str:
     if code.startswith("ERROR_"):
         return f"上游拒绝（{code}）。"
     return ""
-
-    if isinstance(value, (list, tuple)):
-        parts = [coerce_error_message(item) for item in value]
-        return "; ".join(part for part in parts if part) or str(value)
-    return str(value)
 
 
 def api_error_payload(message: Any, err_type: str = "invalid_request_error", **extra: Any) -> dict[str, Any]:
@@ -952,8 +951,24 @@ class SandBackend:
     ) -> dict[str, Any]:
         # Official Grok Bot chat uses GrokBotService, not InferenceService/Stream.
         # Stream still returns ERROR_NOT_HIGH_ENOUGH_PERMISSIONS on SuperGrok+Free.
-        if self._chat_mode() != "stream" and not tools:
-            return self.infer_via_grokbot_service(client_model, messages, request)
+        chat_mode = self._chat_mode()
+        if chat_mode != "stream":
+            # Agent path cannot pass OpenAI tools to GrokBotService. Clients like
+            # Hermes often attach builtin tools even when streaming is off; calling
+            # Stream solely because tools were present yields PERMISSIONS on many
+            # accounts. Default: strip tools and stay on agent. Opt out with
+            # GROKBOT_AGENT_STRIP_TOOLS=0 to restore Stream-when-tools behavior.
+            if tools and not _agent_strip_tools_enabled():
+                pass  # fall through to Stream (legacy / Stream-capable accounts)
+            else:
+                if tools:
+                    print(
+                        f"warning: chat_mode=agent stripping {len(tools)} client tool(s); "
+                        f"GrokBotService has no Stream tool path. Set GROKBOT_AGENT_STRIP_TOOLS=0 "
+                        f"to force InferenceService/Stream when tools are present.",
+                        flush=True,
+                    )
+                return self.infer_via_grokbot_service(client_model, messages, request)
 
         with self.lock:
             # Multi-model: map client alias -> upstream model id + params.
@@ -1360,6 +1375,8 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
 .form-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .muted{color:var(--muted);font-size:.9rem}
 @media (max-width:860px){.layout{grid-template-columns:1fr}.sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}.brand{width:100%}.navbtn{width:auto}}
+html.embed .sidebar{display:none!important}
+html.embed .layout{grid-template-columns:1fr}
 </style></head><body>
 <div class="layout">
   <aside class="sidebar">
@@ -1493,6 +1510,8 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
   </div>
 </div>
 <script>
+const embed=new URLSearchParams(location.search).get('embed')==='1';
+if(embed)document.documentElement.classList.add('embed');
 const TITLES={overview:'总览',models:'模型',keys:'密钥',audits:'审计',media:'媒体',playground:'试用',settings:'设置'};
 let STATE=null;
 const key=()=>localStorage.getItem('grokbot2api_key')||'';

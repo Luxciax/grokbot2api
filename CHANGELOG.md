@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.10
+
+- Desktop shell UI refresh: quieter dark theme, single sidebar with「配置」group, no top status bar.
+- Credential page becomes a 3-step stepper (import → sbi_ → optional API key); dismissible sbi_ notice.
+- Compact overview (gateway + credentials rows); toast feedback (~3s success / ~6s error) instead of stacked banners.
+- Settings drawer: Esc to close, focus host field, note that port changes need gateway restart.
+- Admin iframe uses `?embed=1` so nested sidebar is hidden; section nav updates hash without remounting the iframe.
+- Keep `formatErr` so Tauri errors never render as `[object Object]`.
+
 ## 0.3.9
 
 - Add: Claude Opus 5.5 catalogue family from `AiService/GetUsableModels` packed ids (`claude-opus-5-5-high` / `-high-fast` / `-medium` / `-low` / `-max` / `-xhigh` and fast variants).

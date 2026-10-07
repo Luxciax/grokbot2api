@@ -53,7 +53,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.9"
+__version__ = "0.3.10"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -1375,6 +1375,8 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
 .form-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .muted{color:var(--muted);font-size:.9rem}
 @media (max-width:860px){.layout{grid-template-columns:1fr}.sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}.brand{width:100%}.navbtn{width:auto}}
+html.embed .sidebar{display:none!important}
+html.embed .layout{grid-template-columns:1fr}
 </style></head><body>
 <div class="layout">
   <aside class="sidebar">
@@ -1508,6 +1510,8 @@ textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regula
   </div>
 </div>
 <script>
+const embed=new URLSearchParams(location.search).get('embed')==='1';
+if(embed)document.documentElement.classList.add('embed');
 const TITLES={overview:'总览',models:'模型',keys:'密钥',audits:'审计',media:'媒体',playground:'试用',settings:'设置'};
 let STATE=null;
 const key=()=>localStorage.getItem('grokbot2api_key')||'';
