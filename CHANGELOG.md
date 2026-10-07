@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.12
+
+### Admin workbench redesign
+- Restyle `/admin` to match the quiet desktop shell (Linear-like dark/light tokens, compact metrics strip, quieter panels/tables, toast instead of sticky `#msg`).
+- Theme via `?theme=dark|light` and `postMessage({type:'grokbot2api-theme', theme})`; embed mode hides sidebar + logout, tightens topbar.
+- Shell iframe now loads `?embed=1&theme=…` and syncs theme on change / iframe load.
+
+### Notes
+- All `/admin/api/*` and playground call sites preserved; Chinese labels kept.
+
 ## 0.3.11
 
 ### Desktop

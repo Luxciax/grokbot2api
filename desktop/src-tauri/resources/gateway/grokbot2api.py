@@ -53,7 +53,7 @@ STREAM_HEARTBEAT_SECONDS = 1.0
 # accepted. Clients that ask for small budgets (titles, one-line answers) therefore get a
 # confusing 502. max_tokens is a ceiling, not a target, so raise small ones instead.
 DEFAULT_MIN_MAX_TOKENS = 512
-__version__ = "0.3.10"
+__version__ = "0.3.12"
 AUDIT_RING_SIZE = 200
 TRANSIENT_UPSTREAM_STATUSES = frozenset({429, 502, 503})
 RETRY_BACKOFF_SECONDS = 0.6
@@ -1339,122 +1339,282 @@ def render_admin_html(server: "ProxyServer") -> str:
 <html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>grokbot2api 工作台</title>
 <style>
-:root{--bg:#0b1220;--panel:#111827;--card:#1a2332;--line:#243044;--text:#e7ecf3;--muted:#9aacbf;--accent:#3b82f6;--ok:#34d399;--bad:#f87171;--warn:#fbbf24;--chip:#0f172a}
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-a{color:#93c5fd;text-decoration:none}a:hover{text-decoration:underline}
-.layout{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
-.sidebar{background:var(--panel);border-right:1px solid var(--line);padding:1rem .75rem;display:flex;flex-direction:column;gap:.35rem}
-.brand{padding:.4rem .65rem 1rem;font-weight:700;font-size:1.05rem}
-.brand small{display:block;color:var(--muted);font-weight:500;margin-top:.25rem}
-.navbtn{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--text);padding:.65rem .75rem;border-radius:10px;cursor:pointer;font-size:.95rem}
-.navbtn:hover{background:#1e293b}.navbtn.active{background:#1e3a5f;border-color:#334155}
-.content{display:flex;flex-direction:column;min-width:0}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.9rem 1.25rem;border-bottom:1px solid var(--line);background:#0f172aee;position:sticky;top:0;backdrop-filter:blur(6px);z-index:2;flex-wrap:wrap}
-.topbar h1{margin:0;font-size:1.1rem}.topbar .row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-main{padding:1.1rem 1.25rem 2rem;display:none}main.active{display:block}
-.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem 1.1rem}
-.card h2{margin:0 0 .75rem;font-size:.92rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
-.metric{font-size:1.55rem;font-weight:700}.metric small{font-size:.85rem;color:var(--muted);font-weight:500}
-.kv{display:flex;justify-content:space-between;gap:1rem;padding:.35rem 0;border-bottom:1px solid #24304433;font-size:.92rem}.kv:last-child{border:none}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-table{width:100%;border-collapse:collapse;font-size:.85rem}th,td{text-align:left;padding:.45rem .35rem;border-bottom:1px solid var(--line);vertical-align:top}
-button,select{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:.4rem .75rem;cursor:pointer}
-button.secondary{background:#334155}button.danger{background:#b91c1c}button:disabled{opacity:.55;cursor:not-allowed}
-input[type=text],input[type=password],input[type=number],textarea,select{background:#0f1419;border:1px solid #334;border-radius:8px;color:var(--text);padding:.45rem .6rem;width:100%;margin:.25rem 0}
-textarea{min-height:110px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem}
-.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-.badge{display:inline-block;background:var(--chip);border:1px solid #334155;color:#cbd5e1;border-radius:999px;padding:.1rem .45rem;font-size:.72rem;margin-right:.2rem}
-.badge.chat{color:#93c5fd}.badge.vision{color:#c4b5fd}.badge.image{color:#f9a8d4}.badge.custom{color:#fde68a}
-#msg{min-height:1.2em;color:var(--ok);font-size:.9rem;padding:0 1.25rem 1rem}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.9rem}
-.thumb{background:#0f1419;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0c0d;
+  --bg-elevated: #121214;
+  --bg-hover: #1a1a1d;
+  --bg-active: #1e1e22;
+  --border: #232326;
+  --border-strong: #2e2e33;
+  --text: #ececef;
+  --text-secondary: #a0a0a8;
+  --text-muted: #6b6b74;
+  --accent: #3d9a6a;
+  --accent-muted: rgba(61,154,106,0.15);
+  --accent-hover: #48ad78;
+  --accent-fg: #0a0a0a;
+  --danger: #c45c5c;
+  --danger-muted: rgba(196,92,92,0.12);
+  --warn: #b8923a;
+  --ok: #3d9a6a;
+  --bad: #c45c5c;
+  --mono: "SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --font: "Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --sidebar-w: 168px;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f0f0f2;
+  --bg-active: #ebebed;
+  --border: #e8e8ec;
+  --border-strong: #d8d8de;
+  --text: #1a1a1f;
+  --text-secondary: #5c5c66;
+  --text-muted: #8a8a96;
+  --accent: #2f8f63;
+  --accent-muted: rgba(47,143,99,0.12);
+  --accent-hover: #277a54;
+  --accent-fg: #ffffff;
+  --danger: #c04545;
+  --danger-muted: rgba(192,69,69,0.1);
+  --warn: #a67c28;
+  --ok: #2f8f63;
+  --bad: #c04545;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,textarea,select{font:inherit;color:inherit}
+code{font-family:var(--mono);font-size:12px}
+
+.layout{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+.sidebar{
+  background:var(--bg);border-right:1px solid var(--border);
+  padding:12px 8px;display:flex;flex-direction:column;gap:1px;user-select:none
+}
+.brand{display:flex;align-items:center;gap:8px;padding:8px 8px 12px}
+.brand-mark{width:14px;height:14px;border-radius:4px;background:var(--accent);opacity:.85;flex-shrink:0}
+.brand-text{font-size:13px;font-weight:560;letter-spacing:-0.01em}
+.brand small{display:block;color:var(--text-muted);font-weight:400;font-size:11px;margin-top:1px}
+.navbtn{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  background:transparent;border:none;color:var(--text-secondary);
+  padding:6px 8px;border-radius:var(--radius);cursor:pointer;font-size:13px
+}
+.navbtn:hover{background:var(--bg-hover);color:var(--text)}
+.navbtn.active{background:var(--bg-active);color:var(--text);font-weight:500}
+.nav-dot{width:5px;height:5px;border-radius:50%;background:transparent;flex-shrink:0}
+.navbtn.active .nav-dot{background:var(--accent)}
+
+.content{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);
+  position:sticky;top:0;z-index:2;flex-wrap:wrap
+}
+.topbar h1{margin:0;font-size:14px;font-weight:560;letter-spacing:-0.01em}
+.topbar .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.topbar a.link{color:var(--text-muted);font-size:12px;padding:4px 8px;border-radius:var(--radius)}
+.topbar a.link:hover{color:var(--text);background:var(--bg-hover);text-decoration:none}
+
+main{display:none;padding:16px;flex:1}
+main.active{display:block}
+
+.panel{
+  background:var(--bg-elevated);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px
+}
+.panel:last-child{margin-bottom:0}
+.panel-title{font-size:13px;font-weight:560;color:var(--text);margin:0 0 10px}
+.panel-desc{color:var(--text-muted);font-size:12px;margin:0 0 12px}
+
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px}
+.metric-cell{background:var(--bg-elevated);padding:12px 14px}
+.metric-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.metric-value{font-size:18px;font-weight:560;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.metric-value small{font-size:12px;color:var(--text-muted);font-weight:400}
+.metric-sub{font-size:11px;color:var(--text-secondary);margin-top:4px}
+
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.kv:last-child{border:none;padding-bottom:0}
+.kv span:first-child{color:var(--text-muted)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--text-muted);font-size:12px}
+
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{font-size:11px;font-weight:500;color:var(--text-muted);background:var(--bg);position:sticky;top:0;z-index:1}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg-hover)}
+.empty-row td{color:var(--text-muted);text-align:center;padding:20px 10px}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:5px 10px;border-radius:var(--radius);border:1px solid transparent;
+  cursor:pointer;font-size:12px;font-weight:500;background:transparent;color:var(--text);white-space:nowrap
+}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn-primary:hover:not(:disabled){background:var(--accent-hover)}
+.btn-secondary{background:var(--bg-elevated);border-color:var(--border);color:var(--text)}
+.btn-secondary:hover:not(:disabled){background:var(--bg-hover);border-color:var(--border-strong)}
+.btn-ghost{color:var(--text-secondary)}
+.btn-ghost:hover:not(:disabled){background:var(--bg-hover);color:var(--text)}
+.btn-danger{color:var(--danger);border-color:transparent}
+.btn-danger:hover:not(:disabled){background:var(--danger-muted)}
+button.secondary{background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:12px}
+button.secondary:hover{background:var(--bg-hover)}
+button.danger{background:transparent;border:1px solid transparent;color:var(--danger);border-radius:var(--radius);padding:4px 8px;cursor:pointer;font-size:12px}
+button.danger:hover{background:var(--danger-muted)}
+button:not(.secondary):not(.danger):not(.navbtn):not(.btn){
+  background:var(--accent);color:var(--accent-fg);border:none;border-radius:var(--radius);
+  padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500
+}
+button:not(.secondary):not(.danger):not(.navbtn):not(.btn):hover{background:var(--accent-hover)}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+input[type=text],input[type=password],input[type=number],textarea,select{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);padding:6px 8px;width:100%;margin:4px 0 0
+}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--border-strong)}
+textarea{min-height:100px;resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.5}
+label.field{display:block;font-size:11px;color:var(--text-muted);margin-top:8px}
+label.field:first-child{margin-top:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.check-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-secondary)}
+.check-row label{display:flex;align-items:center;gap:5px;cursor:pointer}
+
+.badge{
+  display:inline-block;background:var(--bg);border:1px solid var(--border);
+  color:var(--text-secondary);border-radius:4px;padding:1px 6px;font-size:11px;margin-right:3px
+}
+.badge.chat{color:var(--text-secondary)}.badge.vision{color:var(--text-secondary)}
+.badge.image{color:var(--text-secondary)}.badge.custom{color:var(--warn)}
+
+#msg{
+  position:fixed;bottom:16px;right:16px;max-width:360px;min-height:0;
+  background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:8px 12px;font-size:12px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,.25);
+  opacity:0;pointer-events:none;transition:opacity .15s;z-index:20
+}
+#msg.show{opacity:1;pointer-events:auto}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.thumb{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
 .thumb img{width:100%;aspect-ratio:1;object-fit:cover;background:#000;display:block}
-.thumb .meta{padding:.6rem .7rem;font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:.25rem}
-.pre{white-space:pre-wrap;background:#0f1419;border:1px solid var(--line);border-radius:10px;padding:.75rem;max-height:320px;overflow:auto;font-size:.85rem}
-.form-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.muted{color:var(--muted);font-size:.9rem}
-@media (max-width:860px){.layout{grid-template-columns:1fr}.sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}.brand{width:100%}.navbtn{width:auto}}
+.thumb .meta{padding:8px 10px;font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px}
+
+.pre{
+  white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px;max-height:320px;overflow:auto;
+  font-size:12px;font-family:var(--mono);line-height:1.5;margin-top:10px;color:var(--text-secondary)
+}
+.pg-grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media (max-width:900px){.pg-grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
+@media (max-width:860px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--border)}
+  .brand{width:100%}.navbtn{width:auto}
+}
+
+/* Embed: shell owns nav — hide admin sidebar / brand / logout */
 html.embed .sidebar{display:none!important}
 html.embed .layout{grid-template-columns:1fr}
+html.embed .topbar{padding:8px 14px}
+html.embed .hide-embed{display:none!important}
+html.embed main{padding:12px 14px}
+html.embed body{overflow:auto}
 </style></head><body>
 <div class="layout">
   <aside class="sidebar">
-    <div class="brand">grokbot2api 工作台<small id="ver"></small></div>
-    <button class="navbtn active" data-sec="overview" onclick="showSec('overview')">总览</button>
-    <button class="navbtn" data-sec="models" onclick="showSec('models')">模型</button>
-    <button class="navbtn" data-sec="keys" onclick="showSec('keys')">密钥</button>
-    <button class="navbtn" data-sec="audits" onclick="showSec('audits')">审计</button>
-    <button class="navbtn" data-sec="media" onclick="showSec('media')">媒体</button>
-    <button class="navbtn" data-sec="playground" onclick="showSec('playground')">试用</button>
-    <button class="navbtn" data-sec="settings" onclick="showSec('settings')">设置</button>
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div><div class="brand-text">工作台</div><small id="ver"></small></div>
+    </div>
+    <button class="navbtn active" data-sec="overview" onclick="showSec('overview')"><span class="nav-dot"></span>总览</button>
+    <button class="navbtn" data-sec="models" onclick="showSec('models')"><span class="nav-dot"></span>模型</button>
+    <button class="navbtn" data-sec="keys" onclick="showSec('keys')"><span class="nav-dot"></span>密钥</button>
+    <button class="navbtn" data-sec="audits" onclick="showSec('audits')"><span class="nav-dot"></span>审计</button>
+    <button class="navbtn" data-sec="media" onclick="showSec('media')"><span class="nav-dot"></span>媒体</button>
+    <button class="navbtn" data-sec="playground" onclick="showSec('playground')"><span class="nav-dot"></span>试用</button>
+    <button class="navbtn" data-sec="settings" onclick="showSec('settings')"><span class="nav-dot"></span>设置</button>
   </aside>
   <div class="content">
     <div class="topbar">
       <h1 id="secTitle">总览</h1>
       <div class="row">
-        <a href="/docs">API 文档</a>
-        <a href="/health">Health</a>
-        <button class="secondary" onclick="refreshAll()">刷新</button>
-        <button class="secondary" onclick="logout()">退出</button>
+        <a class="link" href="/docs" target="_blank" rel="noopener">API 文档</a>
+        <a class="link" href="/health" target="_blank" rel="noopener">Health</a>
+        <button type="button" class="btn btn-ghost" onclick="refreshAll()">刷新</button>
+        <button type="button" class="btn btn-ghost hide-embed" onclick="logout()">退出</button>
       </div>
     </div>
 
     <main id="overview" class="active">
-      <div class="grid" id="overviewCards"></div>
-      <div class="card" style="margin-top:1rem" id="usageCard"></div>
-      <div class="card" style="margin-top:1rem" id="recentErrorsCard"></div>
+      <div class="metrics" id="overviewCards"></div>
+      <div class="panel" id="usageCard"></div>
+      <div class="panel" id="recentErrorsCard"></div>
     </main>
 
     <main id="models">
-      <div class="card">
-        <h2>模型目录</h2>
-        <p class="muted">启用/禁用、设默认，并可为内置目录添加自定义别名（写入 admin_config.json）。</p>
-        <div style="overflow:auto"><table>
+      <div class="panel">
+        <div class="panel-title">模型目录</div>
+        <p class="panel-desc">启用 / 禁用、设默认；可为内置目录添加自定义别名（写入 admin_config.json）。</p>
+        <div class="table-wrap"><table>
           <thead><tr><th>启用</th><th>别名</th><th>能力</th><th>上游 ID</th><th>参数</th><th>默认</th></tr></thead>
           <tbody id="modelsBody"></tbody>
         </table></div>
       </div>
-      <div class="card" style="margin-top:1rem">
-        <h2>添加自定义别名</h2>
+      <div class="panel">
+        <div class="panel-title">添加自定义别名</div>
         <div class="form-grid">
-          <div><label class="muted">别名</label><input id="cmAlias" type="text" placeholder="my-grok-fast"/></div>
-          <div><label class="muted">上游 ID</label><input id="cmUpstream" type="text" placeholder="grok-4.7"/></div>
-          <div><label class="muted">显示名</label><input id="cmDisplay" type="text" placeholder="可选"/></div>
-          <div><label class="muted">参数（key=value, 逗号分隔）</label><input id="cmParams" type="text" placeholder="effort=high, fast=true"/></div>
-          <div><label class="muted">能力</label>
-            <div class="row" style="margin-top:.4rem">
+          <div><label class="field">别名</label><input id="cmAlias" type="text" placeholder="my-grok-fast"/></div>
+          <div><label class="field">上游 ID</label><input id="cmUpstream" type="text" placeholder="grok-4.7"/></div>
+          <div><label class="field">显示名</label><input id="cmDisplay" type="text" placeholder="可选"/></div>
+          <div><label class="field">参数（key=value, 逗号分隔）</label><input id="cmParams" type="text" placeholder="effort=high, fast=true"/></div>
+          <div><label class="field">能力</label>
+            <div class="check-row">
               <label><input type="checkbox" id="cmChat" checked/> chat</label>
               <label><input type="checkbox" id="cmVision"/> vision</label>
               <label><input type="checkbox" id="cmImage"/> image_generation</label>
             </div>
           </div>
         </div>
-        <div class="row" style="margin-top:.8rem"><button onclick="addCustomModel()">添加别名</button></div>
+        <div class="row" style="margin-top:12px"><button type="button" onclick="addCustomModel()">添加别名</button></div>
       </div>
     </main>
 
     <main id="keys">
-      <div class="card">
-        <h2>客户端 API Keys</h2>
-        <p class="muted">任意已登记密钥或主环境变量密钥均可鉴权。界面永不展示完整主密钥或沙箱凭证。</p>
-        <div class="row" style="margin-bottom:.8rem">
-          <input id="newKey" type="text" placeholder="新密钥（可留空自动生成，≥8 字符）" style="flex:1;min-width:180px"/>
-          <input id="newKeyName" type="text" placeholder="备注名（可选）" style="flex:1;min-width:120px"/>
-          <button onclick="createKey()">创建</button>
+      <div class="panel">
+        <div class="panel-title">客户端 API Keys</div>
+        <p class="panel-desc">任意已登记密钥或主环境变量密钥均可鉴权。界面不展示完整主密钥或沙箱凭证。</p>
+        <div class="row" style="margin-bottom:12px">
+          <input id="newKey" type="text" placeholder="新密钥（可留空自动生成，≥8 字符）" style="flex:1;min-width:180px;margin:0"/>
+          <input id="newKeyName" type="text" placeholder="备注名（可选）" style="flex:1;min-width:120px;margin:0"/>
+          <button type="button" onclick="createKey()">创建</button>
         </div>
-        <table><thead><tr><th>备注</th><th>预览</th><th>创建时间</th><th></th></tr></thead>
-        <tbody id="keysBody"></tbody></table>
+        <div class="table-wrap"><table>
+          <thead><tr><th>备注</th><th>预览</th><th>创建时间</th><th></th></tr></thead>
+          <tbody id="keysBody"></tbody>
+        </table></div>
       </div>
     </main>
 
     <main id="audits">
-      <div class="card">
-        <div class="row" style="justify-content:space-between;margin-bottom:.6rem">
-          <h2 style="margin:0">请求审计</h2>
-          <button class="secondary" onclick="exportAudits()">导出 JSON</button>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <div class="panel-title" style="margin:0">请求审计</div>
+          <button type="button" class="btn btn-secondary" onclick="exportAudits()">导出 JSON</button>
         </div>
-        <div style="overflow:auto"><table>
+        <div class="table-wrap"><table>
           <thead><tr><th>时间</th><th>路径</th><th>模型</th><th>状态</th><th>Tokens</th><th>重试</th><th>错误</th></tr></thead>
           <tbody id="auditsBody"></tbody>
         </table></div>
@@ -1462,56 +1622,71 @@ html.embed .layout{grid-template-columns:1fr}
     </main>
 
     <main id="media">
-      <div class="card">
-        <div class="row" style="justify-content:space-between;margin-bottom:.6rem">
-          <h2 style="margin:0">媒体库</h2>
-          <button class="secondary" onclick="loadMedia()">刷新媒体</button>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <div class="panel-title" style="margin:0">媒体库</div>
+          <button type="button" class="btn btn-secondary" onclick="loadMedia()">刷新</button>
         </div>
-        <p class="muted">来自 media/ 索引；缩略图经 /media/&lt;id&gt; 加载。</p>
+        <p class="panel-desc">来自 media/ 索引；缩略图经 /media/&lt;id&gt; 加载。</p>
         <div class="gallery" id="mediaGallery"></div>
       </div>
     </main>
 
     <main id="playground">
-      <div class="grid">
-        <div class="card">
-          <h2>Chat 试用</h2>
-          <label class="muted">模型</label>
+      <div class="pg-grid">
+        <div class="panel">
+          <div class="panel-title">Chat 试用</div>
+          <label class="field">模型</label>
           <select id="pgChatModel"></select>
-          <label class="muted">消息</label>
+          <label class="field">消息</label>
           <textarea id="pgChatPrompt" placeholder="你好，请用一句话介绍自己"></textarea>
-          <div class="row" style="margin-top:.5rem"><button onclick="runChat()">发送 /v1/chat/completions</button></div>
-          <div class="pre" id="pgChatOut" style="margin-top:.75rem">等待输出…</div>
+          <div class="row" style="margin-top:10px"><button type="button" onclick="runChat()">发送</button></div>
+          <div class="pre" id="pgChatOut">等待输出…</div>
         </div>
-        <div class="card">
-          <h2>图像生成试用</h2>
-          <label class="muted">模型</label>
+        <div class="panel">
+          <div class="panel-title">图像生成试用</div>
+          <label class="field">模型</label>
           <select id="pgImgModel"><option value="cursor-generate-image">cursor-generate-image</option></select>
-          <label class="muted">Prompt</label>
+          <label class="field">Prompt</label>
           <textarea id="pgImgPrompt" placeholder="a watercolor fox under moonlight"></textarea>
-          <label class="muted">aspect_ratio</label>
+          <label class="field">aspect_ratio</label>
           <select id="pgAspect">
             <option>1:1</option><option>4:3</option><option>3:4</option><option>16:9</option><option>9:16</option>
           </select>
-          <div class="row" style="margin-top:.5rem"><button onclick="runImage()">生成 /v1/images/generations</button></div>
-          <div id="pgImgOut" style="margin-top:.75rem" class="muted">等待图像…</div>
+          <div class="row" style="margin-top:10px"><button type="button" onclick="runImage()">生成</button></div>
+          <div id="pgImgOut" class="muted" style="margin-top:10px">等待图像…</div>
         </div>
       </div>
     </main>
 
     <main id="settings">
-      <div class="card" id="settingsCard"></div>
-      <div class="card" style="margin-top:1rem">
-        <h2>说明</h2>
-        <p class="muted">CORS 与监听地址由启动参数决定（--cors-origins / --listen / --port），此处只读展示。密钥与 Cursor 凭证永不在本页明文显示。</p>
+      <div class="panel" id="settingsCard"></div>
+      <div class="panel">
+        <div class="panel-title">说明</div>
+        <p class="muted">CORS 与监听地址由启动参数决定（--cors-origins / --listen / --port），此处只读展示。密钥与 Cursor 凭证不在本页明文显示。</p>
       </div>
     </main>
-    <p id="msg"></p>
   </div>
 </div>
+<p id="msg"></p>
 <script>
-const embed=new URLSearchParams(location.search).get('embed')==='1';
-if(embed)document.documentElement.classList.add('embed');
+(function initThemeEmbed(){
+  const qs=new URLSearchParams(location.search);
+  const embed=qs.get('embed')==='1';
+  if(embed) document.documentElement.classList.add('embed');
+  let theme=qs.get('theme');
+  if(theme!=='light' && theme!=='dark'){
+    theme=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  }
+  document.documentElement.dataset.theme=theme;
+  window.addEventListener('message',function(ev){
+    const d=ev.data;
+    if(!d||d.type!=='grokbot2api-theme') return;
+    if(d.theme==='light'||d.theme==='dark'){
+      document.documentElement.dataset.theme=d.theme;
+    }
+  });
+})();
 const TITLES={overview:'总览',models:'模型',keys:'密钥',audits:'审计',media:'媒体',playground:'试用',settings:'设置'};
 let STATE=null;
 const key=()=>localStorage.getItem('grokbot2api_key')||'';
@@ -1531,6 +1706,14 @@ async function readJsonSafe(r){try{return await r.json();}catch(e){return {messa
 function logout(){localStorage.removeItem('grokbot2api_key'); location.href='/admin/login';}
 function pct(n){return ((n||0)*100).toFixed(1)+'%';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function flash(text){
+  const el=document.getElementById('msg');
+  el.textContent=text||'';
+  if(!text){el.classList.remove('show');return;}
+  el.classList.add('show');
+  clearTimeout(flash._t);
+  flash._t=setTimeout(()=>el.classList.remove('show'),3200);
+}
 function showSec(id, syncHash){
   if(!TITLES[id]) id='overview';
   document.querySelectorAll('main').forEach(el=>el.classList.toggle('active', el.id===id));
@@ -1561,28 +1744,20 @@ function capsBadges(m){
 function renderOverview(s){
   const stats=s.stats||{}; const usage=s.usage||{};
   document.getElementById('overviewCards').innerHTML=`
-    <div class="card"><h2>版本 / 运行</h2><div class="metric">v${esc(s.version||'')}</div>
-      <div class="kv"><span>Uptime</span><span>${stats.uptime_seconds??s.uptime_seconds??0}s</span></div>
-      <div class="kv"><span>监听</span><span><code>${esc(s.listen||'')}</code></span></div></div>
-    <div class="card"><h2>模型</h2><div class="metric">${s.models_enabled??0} <small>/ ${((s.catalogue||{}).models||[]).length}</small></div>
-      <div class="kv"><span>默认别名</span><span><code>${esc(s.default_model||'')}</code></span></div>
-      <div class="kv"><span>上游默认</span><span><code>${esc(s.startup_upstream_model||'')}</code></span></div></div>
-    <div class="card"><h2>请求量</h2><div class="metric">${stats.total||0}</div>
-      <div class="kv"><span>成功</span><span class="ok">${stats.success||0}</span></div>
-      <div class="kv"><span>失败</span><span class="${(stats.errors||0)?'bad':'ok'}">${stats.errors||0}</span></div></div>
-    <div class="card"><h2>错误率</h2><div class="metric ${(stats.error_rate||0)>0.05?'bad':'ok'}">${pct(stats.error_rate||0)}</div>
-      <div class="kv"><span>媒体数</span><span>${s.media_count??0}</span></div>
-      <div class="kv"><span>链接</span><span><a href="/docs">/docs</a> · <a href="/health">/health</a></span></div></div>`;
-  document.getElementById('usageCard').innerHTML=`<h2>用量 /v1/usage</h2>${
+    <div class="metric-cell"><div class="metric-label">版本</div><div class="metric-value">v${esc(s.version||'')}</div><div class="metric-sub">${stats.uptime_seconds??s.uptime_seconds??0}s · <code>${esc(s.listen||'')}</code></div></div>
+    <div class="metric-cell"><div class="metric-label">模型</div><div class="metric-value">${s.models_enabled??0} <small>/ ${((s.catalogue||{}).models||[]).length}</small></div><div class="metric-sub">默认 <code>${esc(s.default_model||'')}</code></div></div>
+    <div class="metric-cell"><div class="metric-label">请求</div><div class="metric-value">${stats.total||0}</div><div class="metric-sub"><span class="ok">${stats.success||0}</span> 成功 · <span class="${(stats.errors||0)?'bad':'ok'}">${stats.errors||0}</span> 失败</div></div>
+    <div class="metric-cell"><div class="metric-label">错误率</div><div class="metric-value ${(stats.error_rate||0)>0.05?'bad':''}">${pct(stats.error_rate||0)}</div><div class="metric-sub">媒体 ${s.media_count??0}</div></div>`;
+  document.getElementById('usageCard').innerHTML=`<div class="panel-title">用量</div>${
     s.usage_error?`<div class="bad">${esc(s.usage_error)}</div>`:`
     <div class="kv"><span>已用</span><span>${usage.usagePercent??'—'}%</span></div>
     <div class="kv"><span>剩余</span><span>${usage.usageRemainingPercent??'—'}%</span></div>
     <div class="kv"><span>套餐</span><span>${esc(usage.grokPlanLabel||usage.cursorPlanName||'—')}</span></div>
     <div class="kv"><span>重置</span><span>${esc(usage.nextResetTimestampUtc||'—')}</span></div>`}`;
   const errs=stats.recent_errors||[];
-  document.getElementById('recentErrorsCard').innerHTML=`<h2>最近错误</h2><table><thead><tr><th>时间</th><th>路由</th><th>模型</th><th>错误</th></tr></thead><tbody>${
+  document.getElementById('recentErrorsCard').innerHTML=`<div class="panel-title">最近错误</div><div class="table-wrap"><table><thead><tr><th>时间</th><th>路由</th><th>模型</th><th>错误</th></tr></thead><tbody>${
     errs.length? errs.slice().reverse().map(e=>`<tr><td>${new Date((e.ts||0)*1000).toLocaleString()}</td><td>${esc(e.route||'')}</td><td>${esc(e.model||'')}</td><td class="bad">${esc(e.error||'')}</td></tr>`).join('')
-    : '<tr><td colspan="4">暂无</td></tr>'}</tbody></table>`;
+    : '<tr class="empty-row"><td colspan="4">暂无错误</td></tr>'}</tbody></table></div>`;
 }
 function renderModels(s){
   const models=((s.catalogue||{}).models||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
@@ -1595,9 +1770,9 @@ function renderModels(s){
       <td>${capsBadges(m)}</td>
       <td><code>${esc(m.upstream_id||'')}</code></td>
       <td>${esc(params)}</td>
-      <td>${isDefault?'✓':`<button class="secondary" onclick="setDefault('${esc(m.id)}')">设为默认</button>`}</td>
+      <td>${isDefault?'<span class="muted">默认</span>':`<button type="button" class="btn btn-ghost" onclick="setDefault('${esc(m.id)}')">设为默认</button>`}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6">暂无模型</td></tr>';
+  }).join('')||'<tr class="empty-row"><td colspan="6">暂无模型</td></tr>';
   const chatSel=document.getElementById('pgChatModel');
   const imgSel=document.getElementById('pgImgModel');
   const chatModels=models.filter(m=>m.enabled && ((m.capabilities||[]).includes('chat') || !(m.capabilities||[]).includes('image_generation')));
@@ -1610,8 +1785,8 @@ function renderKeys(s){
   document.getElementById('keysBody').innerHTML=keys.length? keys.map(k=>`<tr>
     <td>${esc(k.name||'—')}</td><td><code>${esc(k.key_preview||'')}</code></td>
     <td>${k.created_at? new Date(k.created_at*1000).toLocaleString():'—'}</td>
-    <td><button class="danger" onclick="revokeKey('${esc(k.id)}')">吊销</button></td>
-  </tr>`).join('') : '<tr><td colspan="4">暂无客户端密钥</td></tr>';
+    <td><button type="button" class="btn btn-danger" onclick="revokeKey('${esc(k.id)}')">吊销</button></td>
+  </tr>`).join('') : '<tr class="empty-row"><td colspan="4">暂无客户端密钥</td></tr>';
 }
 function renderAudits(s){
   const audits=s.audits||[];
@@ -1624,10 +1799,10 @@ function renderAudits(s){
       <td class="${(e.status||0)>=400?'bad':'ok'}">${e.status||''}</td>
       <td>${tokS}</td><td>${e.retried? esc(e.retry_reason||'是'):'—'}</td>
       <td class="bad">${esc(e.error||'')}</td></tr>`;
-  }).join('') : '<tr><td colspan="7">暂无</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="7">暂无记录</td></tr>';
 }
 function renderSettings(s){
-  document.getElementById('settingsCard').innerHTML=`<h2>运行设置（只读）</h2>
+  document.getElementById('settingsCard').innerHTML=`<div class="panel-title">运行设置（只读）</div>
     <div class="kv"><span>需要 API Key</span><span>${s.api_key_required?'是':'否'}</span></div>
     <div class="kv"><span>主密钥(环境变量)</span><span>${s.primary_api_key_configured?'已配置':'未配置'}</span></div>
     <div class="kv"><span>客户端密钥数</span><span>${s.client_key_count||0}</span></div>
@@ -1651,12 +1826,12 @@ async function refreshAll(){
 async function toggle(el){
   const body={enabled:{[el.dataset.alias]: el.checked}};
   const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
-  document.getElementById('msg').textContent=r.ok?'已保存':'保存失败';
+  flash(r.ok?'已保存':'保存失败');
   if(r.ok) render(await r.json());
 }
 async function setDefault(alias){
   const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify({default_alias:alias})});
-  document.getElementById('msg').textContent=r.ok?'默认模型已更新':'更新失败';
+  flash(r.ok?'默认模型已更新':'更新失败');
   if(r.ok) render(await r.json());
 }
 async function addCustomModel(){
@@ -1683,7 +1858,7 @@ async function addCustomModel(){
   };
   const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
   const data=await r.json();
-  document.getElementById('msg').textContent=r.ok?'自定义别名已添加':('失败: '+formatErr(data));
+  flash(r.ok?'自定义别名已添加':('失败: '+formatErr(data)));
   if(r.ok){['cmAlias','cmUpstream','cmDisplay','cmParams'].forEach(id=>document.getElementById(id).value=''); render(data);}
 }
 async function createKey(){
@@ -1693,29 +1868,29 @@ async function createKey(){
   const body=await readJsonSafe(r);
   if(!r.ok){
     const detail=formatErr(body)||('HTTP '+r.status);
-    document.getElementById('msg').textContent=r.status===401
+    flash(r.status===401
       ? ('创建失败: 需要登录（'+detail+'）。请先到登录页填写主密钥或已有客户端密钥。')
-      : ('创建失败: '+detail);
+      : ('创建失败: '+detail));
     if(r.status===401){setTimeout(()=>location.href='/admin/login',800);}
     return;
   }
   const created=(body.key&&body.key.key)||'';
   if(created && !key()) localStorage.setItem('grokbot2api_key', created);
-  document.getElementById('msg').textContent=created
+  flash(created
     ? ('密钥已创建：'+created+'（请妥善保存；已写入本页鉴权）')
-    : '密钥已创建';
+    : '密钥已创建');
   document.getElementById('newKey').value=''; document.getElementById('newKeyName').value='';
   if(body.status) render(body.status); else refreshAll();
 }
 async function revokeKey(id){
   if(!confirm('确认吊销该密钥？')) return;
   const r=await fetch('/admin/api/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'revoke',id})});
-  document.getElementById('msg').textContent=r.ok?'已吊销':('吊销失败: '+formatErr(await readJsonSafe(r)));
+  flash(r.ok?'已吊销':('吊销失败: '+formatErr(await readJsonSafe(r))));
   if(r.ok) refreshAll();
 }
 async function exportAudits(){
   const r=await fetch('/admin/api/audits?limit=500',{headers:authHeaders()});
-  if(!r.ok){document.getElementById('msg').textContent='导出失败';return;}
+  if(!r.ok){flash('导出失败');return;}
   const data=await r.json();
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='grokbot2api-audits.json'; a.click();
@@ -1736,13 +1911,13 @@ async function loadMedia(){
       <div>${esc(it.model||'—')} · ${esc(it.aspect_ratio||'')}</div>
       <div>${it.created? new Date(it.created*1000).toLocaleString():'—'}</div>
       <div title="${esc(it.prompt||'')}">${esc((it.prompt||'').slice(0,80))||'—'}</div>
-      <button class="danger" onclick="deleteMedia('${esc(it.id)}')">删除</button>
+      <button type="button" class="btn btn-danger" onclick="deleteMedia('${esc(it.id)}')">删除</button>
     </div></div>`).join('');
 }
 async function deleteMedia(id){
   if(!confirm('删除该媒体？')) return;
   const r=await fetch('/admin/api/media/'+encodeURIComponent(id),{method:'DELETE',headers:authHeaders()});
-  document.getElementById('msg').textContent=r.ok?'已删除':'删除失败';
+  flash(r.ok?'已删除':'删除失败');
   if(r.ok){loadMedia(); refreshAll();}
 }
 async function runChat(){
@@ -1767,8 +1942,8 @@ async function runImage(){
     if(!r.ok){out.innerHTML='<div class="bad">错误 '+r.status+': '+esc(JSON.stringify(data))+'</div>';return;}
     const url=(((data.data||[])[0]||{}).url)||'';
     const b64=(((data.data||[])[0]||{}).b64_json)||'';
-    if(url) out.innerHTML=`<a href="${esc(url)}" target="_blank"><img src="${esc(url)}" style="max-width:100%;border-radius:10px;border:1px solid #243044"/></a><div class="muted" style="margin-top:.4rem">${esc(url)}</div>`;
-    else if(b64) out.innerHTML=`<img src="data:image/png;base64,${b64}" style="max-width:100%;border-radius:10px;border:1px solid #243044"/>`;
+    if(url) out.innerHTML=`<a href="${esc(url)}" target="_blank"><img src="${esc(url)}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"/></a><div class="muted" style="margin-top:6px">${esc(url)}</div>`;
+    else if(b64) out.innerHTML=`<img src="data:image/png;base64,${b64}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"/>`;
     else out.textContent=JSON.stringify(data,null,2);
     loadMedia();
   }catch(e){out.innerHTML='<div class="bad">'+esc(e)+'</div>';}
@@ -1777,6 +1952,7 @@ applyHashRoute(); refreshAll();
 setInterval(refreshAll, 20000);
 </script></body></html>
 """
+
 
 
 class ProxyHandler(MessagesApiMixin, ResponsesApiMixin, BaseHTTPRequestHandler):

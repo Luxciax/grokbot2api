@@ -97,6 +97,7 @@ export default function App() {
   const initialNavApplied = useRef(false);
   const hostInputRef = useRef<HTMLInputElement>(null);
   const prevAdminBase = useRef<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const lastGatewayErr = useRef<string | null>(null);
   const settingsOpenRef = useRef(settingsOpen);
   settingsOpenRef.current = settingsOpen;
@@ -193,14 +194,37 @@ export default function App() {
     prevAdminBase.current = adminBase;
   }, [adminBase]);
 
+  const resolvedTheme = useMemo(
+    () => resolveTheme(settings?.theme ?? "system"),
+    [settings?.theme],
+  );
+
+  // Keep iframe theme in sync when shell theme changes (system / drawer preview)
+  useEffect(() => {
+    const apply = () => {
+      const t = resolveTheme(settings?.theme ?? "system");
+      const win = iframeRef.current?.contentWindow;
+      if (win) {
+        win.postMessage({ type: "grokbot2api-theme", theme: t }, "*");
+      }
+    };
+    apply();
+    if ((settings?.theme ?? "system") !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => apply();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [settings?.theme, iframeKey, adminBase]);
+
   const adminSrc = useMemo(() => {
     if (!adminBase) return null;
     if (nav === "overview" || nav === "setup") return null;
     const item = NAV_ITEMS.find((n) => n.id === nav);
     const hash = item?.hash;
-    if (hash) return `${adminBase}?embed=1#${hash}`;
-    return `${adminBase}?embed=1`;
-  }, [adminBase, nav]);
+    const q = `embed=1&theme=${resolvedTheme}`;
+    if (hash) return `${adminBase}?${q}#${hash}`;
+    return `${adminBase}?${q}`;
+  }, [adminBase, nav, resolvedTheme]);
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -740,10 +764,18 @@ export default function App() {
               <div className="workbench">
                 <iframe
                   key={iframeKey}
+                  ref={iframeRef}
                   title="admin-workbench"
                   src={adminSrc}
                   className="admin-frame"
                   allow="clipboard-read; clipboard-write"
+                  onLoad={() => {
+                    const t = resolveTheme(settings?.theme ?? "system");
+                    iframeRef.current?.contentWindow?.postMessage(
+                      { type: "grokbot2api-theme", theme: t },
+                      "*",
+                    );
+                  }}
                 />
               </div>
             ) : (

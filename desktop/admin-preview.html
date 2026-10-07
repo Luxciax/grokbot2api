@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>grokbot2api 工作台</title>
+<style>
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0c0d;
+  --bg-elevated: #121214;
+  --bg-hover: #1a1a1d;
+  --bg-active: #1e1e22;
+  --border: #232326;
+  --border-strong: #2e2e33;
+  --text: #ececef;
+  --text-secondary: #a0a0a8;
+  --text-muted: #6b6b74;
+  --accent: #3d9a6a;
+  --accent-muted: rgba(61,154,106,0.15);
+  --accent-hover: #48ad78;
+  --accent-fg: #0a0a0a;
+  --danger: #c45c5c;
+  --danger-muted: rgba(196,92,92,0.12);
+  --warn: #b8923a;
+  --ok: #3d9a6a;
+  --bad: #c45c5c;
+  --mono: "SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --font: "Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --sidebar-w: 168px;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f0f0f2;
+  --bg-active: #ebebed;
+  --border: #e8e8ec;
+  --border-strong: #d8d8de;
+  --text: #1a1a1f;
+  --text-secondary: #5c5c66;
+  --text-muted: #8a8a96;
+  --accent: #2f8f63;
+  --accent-muted: rgba(47,143,99,0.12);
+  --accent-hover: #277a54;
+  --accent-fg: #ffffff;
+  --danger: #c04545;
+  --danger-muted: rgba(192,69,69,0.1);
+  --warn: #a67c28;
+  --ok: #2f8f63;
+  --bad: #c04545;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input,textarea,select{font:inherit;color:inherit}
+code{font-family:var(--mono);font-size:12px}
+
+.layout{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+.sidebar{
+  background:var(--bg);border-right:1px solid var(--border);
+  padding:12px 8px;display:flex;flex-direction:column;gap:1px;user-select:none
+}
+.brand{display:flex;align-items:center;gap:8px;padding:8px 8px 12px}
+.brand-mark{width:14px;height:14px;border-radius:4px;background:var(--accent);opacity:.85;flex-shrink:0}
+.brand-text{font-size:13px;font-weight:560;letter-spacing:-0.01em}
+.brand small{display:block;color:var(--text-muted);font-weight:400;font-size:11px;margin-top:1px}
+.navbtn{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  background:transparent;border:none;color:var(--text-secondary);
+  padding:6px 8px;border-radius:var(--radius);cursor:pointer;font-size:13px
+}
+.navbtn:hover{background:var(--bg-hover);color:var(--text)}
+.navbtn.active{background:var(--bg-active);color:var(--text);font-weight:500}
+.nav-dot{width:5px;height:5px;border-radius:50%;background:transparent;flex-shrink:0}
+.navbtn.active .nav-dot{background:var(--accent)}
+
+.content{display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);
+  position:sticky;top:0;z-index:2;flex-wrap:wrap
+}
+.topbar h1{margin:0;font-size:14px;font-weight:560;letter-spacing:-0.01em}
+.topbar .row{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.topbar a.link{color:var(--text-muted);font-size:12px;padding:4px 8px;border-radius:var(--radius)}
+.topbar a.link:hover{color:var(--text);background:var(--bg-hover);text-decoration:none}
+
+main{display:none;padding:16px;flex:1}
+main.active{display:block}
+
+.panel{
+  background:var(--bg-elevated);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px
+}
+.panel:last-child{margin-bottom:0}
+.panel-title{font-size:13px;font-weight:560;color:var(--text);margin:0 0 10px}
+.panel-desc{color:var(--text-muted);font-size:12px;margin:0 0 12px}
+
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px}
+.metric-cell{background:var(--bg-elevated);padding:12px 14px}
+.metric-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.metric-value{font-size:18px;font-weight:560;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.metric-value small{font-size:12px;color:var(--text-muted);font-weight:400}
+.metric-sub{font-size:11px;color:var(--text-secondary);margin-top:4px}
+
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.kv:last-child{border:none;padding-bottom:0}
+.kv span:first-child{color:var(--text-muted)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--text-muted);font-size:12px}
+
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{font-size:11px;font-weight:500;color:var(--text-muted);background:var(--bg);position:sticky;top:0;z-index:1}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg-hover)}
+.empty-row td{color:var(--text-muted);text-align:center;padding:20px 10px}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:5px 10px;border-radius:var(--radius);border:1px solid transparent;
+  cursor:pointer;font-size:12px;font-weight:500;background:transparent;color:var(--text);white-space:nowrap
+}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn-primary:hover:not(:disabled){background:var(--accent-hover)}
+.btn-secondary{background:var(--bg-elevated);border-color:var(--border);color:var(--text)}
+.btn-secondary:hover:not(:disabled){background:var(--bg-hover);border-color:var(--border-strong)}
+.btn-ghost{color:var(--text-secondary)}
+.btn-ghost:hover:not(:disabled){background:var(--bg-hover);color:var(--text)}
+.btn-danger{color:var(--danger);border-color:transparent}
+.btn-danger:hover:not(:disabled){background:var(--danger-muted)}
+button.secondary{background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:12px}
+button.secondary:hover{background:var(--bg-hover)}
+button.danger{background:transparent;border:1px solid transparent;color:var(--danger);border-radius:var(--radius);padding:4px 8px;cursor:pointer;font-size:12px}
+button.danger:hover{background:var(--danger-muted)}
+button:not(.secondary):not(.danger):not(.navbtn):not(.btn){
+  background:var(--accent);color:var(--accent-fg);border:none;border-radius:var(--radius);
+  padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500
+}
+button:not(.secondary):not(.danger):not(.navbtn):not(.btn):hover{background:var(--accent-hover)}
+button:disabled{opacity:.5;cursor:not-allowed}
+
+input[type=text],input[type=password],input[type=number],textarea,select{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);padding:6px 8px;width:100%;margin:4px 0 0
+}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--border-strong)}
+textarea{min-height:100px;resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.5}
+label.field{display:block;font-size:11px;color:var(--text-muted);margin-top:8px}
+label.field:first-child{margin-top:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.check-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text-secondary)}
+.check-row label{display:flex;align-items:center;gap:5px;cursor:pointer}
+
+.badge{
+  display:inline-block;background:var(--bg);border:1px solid var(--border);
+  color:var(--text-secondary);border-radius:4px;padding:1px 6px;font-size:11px;margin-right:3px
+}
+.badge.chat{color:var(--text-secondary)}.badge.vision{color:var(--text-secondary)}
+.badge.image{color:var(--text-secondary)}.badge.custom{color:var(--warn)}
+
+#msg{
+  position:fixed;bottom:16px;right:16px;max-width:360px;min-height:0;
+  background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:8px 12px;font-size:12px;color:var(--text);box-shadow:0 4px 16px rgba(0,0,0,.25);
+  opacity:0;pointer-events:none;transition:opacity .15s;z-index:20
+}
+#msg.show{opacity:1;pointer-events:auto}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.thumb{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+.thumb img{width:100%;aspect-ratio:1;object-fit:cover;background:#000;display:block}
+.thumb .meta{padding:8px 10px;font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;gap:3px}
+
+.pre{
+  white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px;max-height:320px;overflow:auto;
+  font-size:12px;font-family:var(--mono);line-height:1.5;margin-top:10px;color:var(--text-secondary)
+}
+.pg-grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media (max-width:900px){.pg-grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}}
+@media (max-width:860px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--border)}
+  .brand{width:100%}.navbtn{width:auto}
+}
+
+/* Embed: shell owns nav — hide admin sidebar / brand / logout */
+html.embed .sidebar{display:none!important}
+html.embed .layout{grid-template-columns:1fr}
+html.embed .topbar{padding:8px 14px}
+html.embed .hide-embed{display:none!important}
+html.embed main{padding:12px 14px}
+html.embed body{overflow:auto}
+</style></head><body>
+<div style="position:fixed;top:10px;right:10px;z-index:99;display:flex;gap:6px">
+<button type="button" class="btn btn-secondary" onclick="document.documentElement.dataset.theme='dark'">暗色</button>
+<button type="button" class="btn btn-secondary" onclick="document.documentElement.dataset.theme='light'">亮色</button>
+<button type="button" class="btn btn-secondary" onclick="document.documentElement.classList.toggle('embed')">embed</button>
+</div>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div><div class="brand-text">工作台</div><small id="ver"></small></div>
+    </div>
+    <button class="navbtn active" data-sec="overview" onclick="showSec('overview')"><span class="nav-dot"></span>总览</button>
+    <button class="navbtn" data-sec="models" onclick="showSec('models')"><span class="nav-dot"></span>模型</button>
+    <button class="navbtn" data-sec="keys" onclick="showSec('keys')"><span class="nav-dot"></span>密钥</button>
+    <button class="navbtn" data-sec="audits" onclick="showSec('audits')"><span class="nav-dot"></span>审计</button>
+    <button class="navbtn" data-sec="media" onclick="showSec('media')"><span class="nav-dot"></span>媒体</button>
+    <button class="navbtn" data-sec="playground" onclick="showSec('playground')"><span class="nav-dot"></span>试用</button>
+    <button class="navbtn" data-sec="settings" onclick="showSec('settings')"><span class="nav-dot"></span>设置</button>
+  </aside>
+  <div class="content">
+    <div class="topbar">
+      <h1 id="secTitle">总览</h1>
+      <div class="row">
+        <a class="link" href="/docs" target="_blank" rel="noopener">API 文档</a>
+        <a class="link" href="/health" target="_blank" rel="noopener">Health</a>
+        <button type="button" class="btn btn-ghost" onclick="refreshAll()">刷新</button>
+        <button type="button" class="btn btn-ghost hide-embed" onclick="logout()">退出</button>
+      </div>
+    </div>
+
+    <main id="overview" class="active">
+      <div class="metrics" id="overviewCards"></div>
+      <div class="panel" id="usageCard"></div>
+      <div class="panel" id="recentErrorsCard"></div>
+    </main>
+
+    <main id="models">
+      <div class="panel">
+        <div class="panel-title">模型目录</div>
+        <p class="panel-desc">启用 / 禁用、设默认；可为内置目录添加自定义别名（写入 admin_config.json）。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>启用</th><th>别名</th><th>能力</th><th>上游 ID</th><th>参数</th><th>默认</th></tr></thead>
+          <tbody id="modelsBody"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">添加自定义别名</div>
+        <div class="form-grid">
+          <div><label class="field">别名</label><input id="cmAlias" type="text" placeholder="my-grok-fast"/></div>
+          <div><label class="field">上游 ID</label><input id="cmUpstream" type="text" placeholder="grok-4.7"/></div>
+          <div><label class="field">显示名</label><input id="cmDisplay" type="text" placeholder="可选"/></div>
+          <div><label class="field">参数（key=value, 逗号分隔）</label><input id="cmParams" type="text" placeholder="effort=high, fast=true"/></div>
+          <div><label class="field">能力</label>
+            <div class="check-row">
+              <label><input type="checkbox" id="cmChat" checked/> chat</label>
+              <label><input type="checkbox" id="cmVision"/> vision</label>
+              <label><input type="checkbox" id="cmImage"/> image_generation</label>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px"><button type="button" onclick="addCustomModel()">添加别名</button></div>
+      </div>
+    </main>
+
+    <main id="keys">
+      <div class="panel">
+        <div class="panel-title">客户端 API Keys</div>
+        <p class="panel-desc">任意已登记密钥或主环境变量密钥均可鉴权。界面不展示完整主密钥或沙箱凭证。</p>
+        <div class="row" style="margin-bottom:12px">
+          <input id="newKey" type="text" placeholder="新密钥（可留空自动生成，≥8 字符）" style="flex:1;min-width:180px;margin:0"/>
+          <input id="newKeyName" type="text" placeholder="备注名（可选）" style="flex:1;min-width:120px;margin:0"/>
+          <button type="button" onclick="createKey()">创建</button>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>备注</th><th>预览</th><th>创建时间</th><th></th></tr></thead>
+          <tbody id="keysBody"></tbody>
+        </table></div>
+      </div>
+    </main>
+
+    <main id="audits">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <div class="panel-title" style="margin:0">请求审计</div>
+          <button type="button" class="btn btn-secondary" onclick="exportAudits()">导出 JSON</button>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>时间</th><th>路径</th><th>模型</th><th>状态</th><th>Tokens</th><th>重试</th><th>错误</th></tr></thead>
+          <tbody id="auditsBody"></tbody>
+        </table></div>
+      </div>
+    </main>
+
+    <main id="media">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <div class="panel-title" style="margin:0">媒体库</div>
+          <button type="button" class="btn btn-secondary" onclick="loadMedia()">刷新</button>
+        </div>
+        <p class="panel-desc">来自 media/ 索引；缩略图经 /media/&lt;id&gt; 加载。</p>
+        <div class="gallery" id="mediaGallery"></div>
+      </div>
+    </main>
+
+    <main id="playground">
+      <div class="pg-grid">
+        <div class="panel">
+          <div class="panel-title">Chat 试用</div>
+          <label class="field">模型</label>
+          <select id="pgChatModel"></select>
+          <label class="field">消息</label>
+          <textarea id="pgChatPrompt" placeholder="你好，请用一句话介绍自己"></textarea>
+          <div class="row" style="margin-top:10px"><button type="button" onclick="runChat()">发送</button></div>
+          <div class="pre" id="pgChatOut">等待输出…</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">图像生成试用</div>
+          <label class="field">模型</label>
+          <select id="pgImgModel"><option value="cursor-generate-image">cursor-generate-image</option></select>
+          <label class="field">Prompt</label>
+          <textarea id="pgImgPrompt" placeholder="a watercolor fox under moonlight"></textarea>
+          <label class="field">aspect_ratio</label>
+          <select id="pgAspect">
+            <option>1:1</option><option>4:3</option><option>3:4</option><option>16:9</option><option>9:16</option>
+          </select>
+          <div class="row" style="margin-top:10px"><button type="button" onclick="runImage()">生成</button></div>
+          <div id="pgImgOut" class="muted" style="margin-top:10px">等待图像…</div>
+        </div>
+      </div>
+    </main>
+
+    <main id="settings">
+      <div class="panel" id="settingsCard"></div>
+      <div class="panel">
+        <div class="panel-title">说明</div>
+        <p class="muted">CORS 与监听地址由启动参数决定（--cors-origins / --listen / --port），此处只读展示。密钥与 Cursor 凭证不在本页明文显示。</p>
+      </div>
+    </main>
+  </div>
+</div>
+<p id="msg"></p>
+<script>
+(function initThemeEmbed(){
+  const qs=new URLSearchParams(location.search);
+  const embed=qs.get('embed')==='1';
+  if(embed) document.documentElement.classList.add('embed');
+  let theme=qs.get('theme');
+  if(theme!=='light' && theme!=='dark'){
+    theme=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  }
+  document.documentElement.dataset.theme=theme;
+  window.addEventListener('message',function(ev){
+    const d=ev.data;
+    if(!d||d.type!=='grokbot2api-theme') return;
+    if(d.theme==='light'||d.theme==='dark'){
+      document.documentElement.dataset.theme=d.theme;
+    }
+  });
+})();
+const TITLES={overview:'总览',models:'模型',keys:'密钥',audits:'审计',media:'媒体',playground:'试用',settings:'设置'};
+let STATE=null;
+const key=()=>localStorage.getItem('grokbot2api_key')||'';
+function authHeaders(extra){const h=Object.assign({'Content-Type':'application/json'},extra||{}); const k=key(); if(k) h['Authorization']='Bearer '+k; return h;}
+function formatErr(v){
+  if(v==null||v==='') return '';
+  if(typeof v==='string') return v;
+  if(v instanceof Error) return v.message||String(v);
+  if(typeof v==='object'){
+    if(typeof v.message==='string'&&v.message) return v.message;
+    if(v.error!=null) return formatErr(v.error);
+    try{return JSON.stringify(v);}catch(e){return Object.prototype.toString.call(v);}
+  }
+  return String(v);
+}
+async function readJsonSafe(r){try{return await r.json();}catch(e){return {message:'HTTP '+r.status+'（响应非 JSON）'};}}
+function logout(){localStorage.removeItem('grokbot2api_key'); location.href='/admin/login';}
+function pct(n){return ((n||0)*100).toFixed(1)+'%';}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function flash(text){
+  const el=document.getElementById('msg');
+  el.textContent=text||'';
+  if(!text){el.classList.remove('show');return;}
+  el.classList.add('show');
+  clearTimeout(flash._t);
+  flash._t=setTimeout(()=>el.classList.remove('show'),3200);
+}
+function showSec(id, syncHash){
+  if(!TITLES[id]) id='overview';
+  document.querySelectorAll('main').forEach(el=>el.classList.toggle('active', el.id===id));
+  document.querySelectorAll('.navbtn').forEach(el=>el.classList.toggle('active', el.dataset.sec===id));
+  document.getElementById('secTitle').textContent=TITLES[id]||id;
+  if(syncHash!==false){
+    const want=id==='overview'?'':id;
+    if((location.hash||'').replace(/^#/,'')!==want){
+      history.replaceState(null,'', want?('#'+want):location.pathname+location.search);
+    }
+  }
+  if(id==='media') loadMedia();
+}
+function applyHashRoute(){
+  const h=(location.hash||'').replace(/^#/,'').trim();
+  showSec(h && TITLES[h]?h:'overview', false);
+}
+window.addEventListener('hashchange', applyHashRoute);
+function capsBadges(m){
+  const caps=m.capabilities||[];
+  let html='';
+  if(caps.includes('chat')||(!caps.includes('image_generation') && m.supports_vision!==false)) html+='<span class="badge chat">chat</span>';
+  if(m.supports_vision || caps.includes('vision')) html+='<span class="badge vision">vision</span>';
+  if(caps.includes('image_generation')) html+='<span class="badge image">image-gen</span>';
+  if(m.is_custom) html+='<span class="badge custom">custom</span>';
+  return html||'—';
+}
+function renderOverview(s){
+  const stats=s.stats||{}; const usage=s.usage||{};
+  document.getElementById('overviewCards').innerHTML=`
+    <div class="metric-cell"><div class="metric-label">版本</div><div class="metric-value">v${esc(s.version||'')}</div><div class="metric-sub">${stats.uptime_seconds??s.uptime_seconds??0}s · <code>${esc(s.listen||'')}</code></div></div>
+    <div class="metric-cell"><div class="metric-label">模型</div><div class="metric-value">${s.models_enabled??0} <small>/ ${((s.catalogue||{}).models||[]).length}</small></div><div class="metric-sub">默认 <code>${esc(s.default_model||'')}</code></div></div>
+    <div class="metric-cell"><div class="metric-label">请求</div><div class="metric-value">${stats.total||0}</div><div class="metric-sub"><span class="ok">${stats.success||0}</span> 成功 · <span class="${(stats.errors||0)?'bad':'ok'}">${stats.errors||0}</span> 失败</div></div>
+    <div class="metric-cell"><div class="metric-label">错误率</div><div class="metric-value ${(stats.error_rate||0)>0.05?'bad':''}">${pct(stats.error_rate||0)}</div><div class="metric-sub">媒体 ${s.media_count??0}</div></div>`;
+  document.getElementById('usageCard').innerHTML=`<div class="panel-title">用量</div>${
+    s.usage_error?`<div class="bad">${esc(s.usage_error)}</div>`:`
+    <div class="kv"><span>已用</span><span>${usage.usagePercent??'—'}%</span></div>
+    <div class="kv"><span>剩余</span><span>${usage.usageRemainingPercent??'—'}%</span></div>
+    <div class="kv"><span>套餐</span><span>${esc(usage.grokPlanLabel||usage.cursorPlanName||'—')}</span></div>
+    <div class="kv"><span>重置</span><span>${esc(usage.nextResetTimestampUtc||'—')}</span></div>`}`;
+  const errs=stats.recent_errors||[];
+  document.getElementById('recentErrorsCard').innerHTML=`<div class="panel-title">最近错误</div><div class="table-wrap"><table><thead><tr><th>时间</th><th>路由</th><th>模型</th><th>错误</th></tr></thead><tbody>${
+    errs.length? errs.slice().reverse().map(e=>`<tr><td>${new Date((e.ts||0)*1000).toLocaleString()}</td><td>${esc(e.route||'')}</td><td>${esc(e.model||'')}</td><td class="bad">${esc(e.error||'')}</td></tr>`).join('')
+    : '<tr class="empty-row"><td colspan="4">暂无错误</td></tr>'}</tbody></table></div>`;
+}
+function renderModels(s){
+  const models=((s.catalogue||{}).models||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+  document.getElementById('modelsBody').innerHTML=models.map(m=>{
+    const params=(m.params||[]).map(p=>`${p.id}=${p.value}`).join(', ')||'—';
+    const isDefault=m.id===s.default_model;
+    return `<tr>
+      <td><input type="checkbox" data-alias="${esc(m.id)}" ${m.enabled?'checked':''} onchange="toggle(this)"/></td>
+      <td><code>${esc(m.id)}</code><div class="muted">${esc(m.display_name||'')}</div></td>
+      <td>${capsBadges(m)}</td>
+      <td><code>${esc(m.upstream_id||'')}</code></td>
+      <td>${esc(params)}</td>
+      <td>${isDefault?'<span class="muted">默认</span>':`<button type="button" class="btn btn-ghost" onclick="setDefault('${esc(m.id)}')">设为默认</button>`}</td>
+    </tr>`;
+  }).join('')||'<tr class="empty-row"><td colspan="6">暂无模型</td></tr>';
+  const chatSel=document.getElementById('pgChatModel');
+  const imgSel=document.getElementById('pgImgModel');
+  const chatModels=models.filter(m=>m.enabled && ((m.capabilities||[]).includes('chat') || !(m.capabilities||[]).includes('image_generation')));
+  const imgModels=models.filter(m=>m.enabled && (m.capabilities||[]).includes('image_generation'));
+  chatSel.innerHTML=chatModels.map(m=>`<option value="${esc(m.id)}" ${m.id===s.default_model?'selected':''}>${esc(m.id)}</option>`).join('')||'<option value="cursor-grok-4-7">cursor-grok-4-7</option>';
+  imgSel.innerHTML=imgModels.map(m=>`<option value="${esc(m.id)}">${esc(m.id)}</option>`).join('')||'<option value="cursor-generate-image">cursor-generate-image</option>';
+}
+function renderKeys(s){
+  const keys=((s.catalogue||{}).client_keys||[]);
+  document.getElementById('keysBody').innerHTML=keys.length? keys.map(k=>`<tr>
+    <td>${esc(k.name||'—')}</td><td><code>${esc(k.key_preview||'')}</code></td>
+    <td>${k.created_at? new Date(k.created_at*1000).toLocaleString():'—'}</td>
+    <td><button type="button" class="btn btn-danger" onclick="revokeKey('${esc(k.id)}')">吊销</button></td>
+  </tr>`).join('') : '<tr class="empty-row"><td colspan="4">暂无客户端密钥</td></tr>';
+}
+function renderAudits(s){
+  const audits=s.audits||[];
+  document.getElementById('auditsBody').innerHTML=audits.length? audits.slice().reverse().map(e=>{
+    const tok=e.tokens||{};
+    const tokS=(tok.prompt_tokens!=null||tok.completion_tokens!=null)? `${tok.prompt_tokens||0}/${tok.completion_tokens||0}` : '—';
+    return `<tr>
+      <td>${esc(e.time|| (e.ts? new Date(e.ts*1000).toLocaleString():''))}</td>
+      <td><code>${esc(e.path||'')}</code></td><td>${esc(e.model||'')}</td>
+      <td class="${(e.status||0)>=400?'bad':'ok'}">${e.status||''}</td>
+      <td>${tokS}</td><td>${e.retried? esc(e.retry_reason||'是'):'—'}</td>
+      <td class="bad">${esc(e.error||'')}</td></tr>`;
+  }).join('') : '<tr class="empty-row"><td colspan="7">暂无记录</td></tr>';
+}
+function renderSettings(s){
+  document.getElementById('settingsCard').innerHTML=`<div class="panel-title">运行设置（只读）</div>
+    <div class="kv"><span>需要 API Key</span><span>${s.api_key_required?'是':'否'}</span></div>
+    <div class="kv"><span>主密钥(环境变量)</span><span>${s.primary_api_key_configured?'已配置':'未配置'}</span></div>
+    <div class="kv"><span>客户端密钥数</span><span>${s.client_key_count||0}</span></div>
+    <div class="kv"><span>CORS</span><span><code>${esc((s.cors_origins||[]).join(', ')||'关闭')}</code></span></div>
+    <div class="kv"><span>监听</span><span><code>${esc(s.listen||'')}</code></span></div>
+    <div class="kv"><span>文档</span><span><a href="/docs">/docs</a></span></div>
+    <div class="kv"><span>健康检查</span><span><a href="/health">/health</a></span></div>`;
+}
+function render(s){
+  STATE=s;
+  document.getElementById('ver').textContent='v'+(s.version||'');
+  renderOverview(s); renderModels(s); renderKeys(s); renderAudits(s); renderSettings(s);
+}
+async function refreshAll(){
+  const r=await fetch('/admin/api/status',{headers:authHeaders()});
+  if(r.status===401){location.href='/admin/login';return;}
+  const s=await r.json(); render(s);
+  const active=document.querySelector('main.active');
+  if(active && active.id==='media') loadMedia();
+}
+async function toggle(el){
+  const body={enabled:{[el.dataset.alias]: el.checked}};
+  const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
+  flash(r.ok?'已保存':'保存失败');
+  if(r.ok) render(await r.json());
+}
+async function setDefault(alias){
+  const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify({default_alias:alias})});
+  flash(r.ok?'默认模型已更新':'更新失败');
+  if(r.ok) render(await r.json());
+}
+async function addCustomModel(){
+  const caps=[];
+  if(document.getElementById('cmChat').checked) caps.push('chat');
+  if(document.getElementById('cmVision').checked) caps.push('vision');
+  if(document.getElementById('cmImage').checked) caps.push('image_generation');
+  const params=[];
+  const raw=(document.getElementById('cmParams').value||'').trim();
+  if(raw){
+    for(const part of raw.split(',')){
+      const [k,...rest]=part.split('=');
+      if(!k||!rest.length) continue;
+      params.push({id:k.trim(), value:rest.join('=').trim()});
+    }
+  }
+  const body={
+    action:'add',
+    alias:document.getElementById('cmAlias').value,
+    upstream_id:document.getElementById('cmUpstream').value,
+    display_name:document.getElementById('cmDisplay').value,
+    params, capabilities:caps,
+    supports_vision:document.getElementById('cmVision').checked
+  };
+  const r=await fetch('/admin/api/models',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
+  const data=await r.json();
+  flash(r.ok?'自定义别名已添加':('失败: '+formatErr(data)));
+  if(r.ok){['cmAlias','cmUpstream','cmDisplay','cmParams'].forEach(id=>document.getElementById(id).value=''); render(data);}
+}
+async function createKey(){
+  const keyVal=document.getElementById('newKey').value;
+  const name=document.getElementById('newKeyName').value;
+  const r=await fetch('/admin/api/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'create',key:keyVal,name})});
+  const body=await readJsonSafe(r);
+  if(!r.ok){
+    const detail=formatErr(body)||('HTTP '+r.status);
+    flash(r.status===401
+      ? ('创建失败: 需要登录（'+detail+'）。请先到登录页填写主密钥或已有客户端密钥。')
+      : ('创建失败: '+detail));
+    if(r.status===401){setTimeout(()=>location.href='/admin/login',800);}
+    return;
+  }
+  const created=(body.key&&body.key.key)||'';
+  if(created && !key()) localStorage.setItem('grokbot2api_key', created);
+  flash(created
+    ? ('密钥已创建：'+created+'（请妥善保存；已写入本页鉴权）')
+    : '密钥已创建');
+  document.getElementById('newKey').value=''; document.getElementById('newKeyName').value='';
+  if(body.status) render(body.status); else refreshAll();
+}
+async function revokeKey(id){
+  if(!confirm('确认吊销该密钥？')) return;
+  const r=await fetch('/admin/api/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'revoke',id})});
+  flash(r.ok?'已吊销':('吊销失败: '+formatErr(await readJsonSafe(r))));
+  if(r.ok) refreshAll();
+}
+async function exportAudits(){
+  const r=await fetch('/admin/api/audits?limit=500',{headers:authHeaders()});
+  if(!r.ok){flash('导出失败');return;}
+  const data=await r.json();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='grokbot2api-audits.json'; a.click();
+}
+async function loadMedia(){
+  const box=document.getElementById('mediaGallery');
+  box.innerHTML='<div class="muted">加载中…</div>';
+  const r=await fetch('/admin/api/media',{headers:authHeaders()});
+  if(r.status===401){location.href='/admin/login';return;}
+  if(!r.ok){box.innerHTML='<div class="bad">加载失败</div>';return;}
+  const data=await r.json();
+  const items=data.items||[];
+  if(!items.length){box.innerHTML='<div class="muted">暂无生成图片</div>';return;}
+  box.innerHTML=items.map(it=>`<div class="thumb">
+    <a href="/media/${esc(it.id)}" target="_blank" rel="noopener"><img src="/media/${esc(it.id)}" alt="${esc(it.prompt||it.id)}"/></a>
+    <div class="meta">
+      <div><code>${esc(it.id).slice(0,10)}…</code></div>
+      <div>${esc(it.model||'—')} · ${esc(it.aspect_ratio||'')}</div>
+      <div>${it.created? new Date(it.created*1000).toLocaleString():'—'}</div>
+      <div title="${esc(it.prompt||'')}">${esc((it.prompt||'').slice(0,80))||'—'}</div>
+      <button type="button" class="btn btn-danger" onclick="deleteMedia('${esc(it.id)}')">删除</button>
+    </div></div>`).join('');
+}
+async function deleteMedia(id){
+  if(!confirm('删除该媒体？')) return;
+  const r=await fetch('/admin/api/media/'+encodeURIComponent(id),{method:'DELETE',headers:authHeaders()});
+  flash(r.ok?'已删除':'删除失败');
+  if(r.ok){loadMedia(); refreshAll();}
+}
+async function runChat(){
+  const out=document.getElementById('pgChatOut');
+  out.textContent='请求中…';
+  const payload={model:document.getElementById('pgChatModel').value, messages:[{role:'user',content:document.getElementById('pgChatPrompt').value||'hi'}], stream:false};
+  try{
+    const r=await fetch('/v1/chat/completions',{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
+    const data=await readJsonSafe(r);
+    if(!r.ok){out.textContent='错误 '+r.status+': '+formatErr(data);return;}
+    const text=(((data.choices||[])[0]||{}).message||{}).content||JSON.stringify(data,null,2);
+    out.textContent=text;
+  }catch(e){out.textContent=formatErr(e);}
+}
+async function runImage(){
+  const out=document.getElementById('pgImgOut');
+  out.innerHTML='生成中…';
+  const payload={model:document.getElementById('pgImgModel').value, prompt:document.getElementById('pgImgPrompt').value||'a fox', aspect_ratio:document.getElementById('pgAspect').value, response_format:'url'};
+  try{
+    const r=await fetch('/v1/images/generations',{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
+    const data=await r.json();
+    if(!r.ok){out.innerHTML='<div class="bad">错误 '+r.status+': '+esc(JSON.stringify(data))+'</div>';return;}
+    const url=(((data.data||[])[0]||{}).url)||'';
+    const b64=(((data.data||[])[0]||{}).b64_json)||'';
+    if(url) out.innerHTML=`<a href="${esc(url)}" target="_blank"><img src="${esc(url)}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"/></a><div class="muted" style="margin-top:6px">${esc(url)}</div>`;
+    else if(b64) out.innerHTML=`<img src="data:image/png;base64,${b64}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"/>`;
+    else out.textContent=JSON.stringify(data,null,2);
+    loadMedia();
+  }catch(e){out.innerHTML='<div class="bad">'+esc(e)+'</div>';}
+}
+
+/* preview mock */
+async function refreshAll(){
+  const s={
+    version:'0.3.12', listen:'127.0.0.1:8787', uptime_seconds:3661,
+    models_enabled:3, default_model:'cursor-grok-4-7', startup_upstream_model:'grok-4.7',
+    media_count:2, api_key_required:true, primary_api_key_configured:true, client_key_count:1,
+    cors_origins:['*'],
+    stats:{total:128, success:120, errors:8, error_rate:0.0625, uptime_seconds:3661, recent_errors:[
+      {ts:Date.now()/1000-120, route:'/v1/chat/completions', model:'cursor-grok-4-7', error:'upstream 429'},
+    ]},
+    usage:{usagePercent:42, usageRemainingPercent:58, grokPlanLabel:'Pro', nextResetTimestampUtc:'2026-11-01T00:00:00Z'},
+    catalogue:{models:[
+      {id:'cursor-grok-4-7', display_name:'Grok 4.7', upstream_id:'grok-4.7', enabled:true, capabilities:['chat','vision'], supports_vision:true, params:[]},
+      {id:'cursor-generate-image', display_name:'Image', upstream_id:'image', enabled:true, capabilities:['image_generation'], params:[]},
+      {id:'my-fast', display_name:'Fast', upstream_id:'grok-4.7', enabled:false, is_custom:true, capabilities:['chat'], params:[{id:'effort',value:'low'}]},
+    ], client_keys:[{id:'k1', name:'local', key_preview:'sk-…abcd', created_at:Date.now()/1000-86400}]},
+    audits:[
+      {ts:Date.now()/1000-30, path:'/v1/chat/completions', model:'cursor-grok-4-7', status:200, tokens:{prompt_tokens:12, completion_tokens:40}},
+      {ts:Date.now()/1000-90, path:'/v1/images/generations', model:'cursor-generate-image', status:500, error:'timeout', retried:true, retry_reason:'retry'},
+    ]
+  };
+  render(s);
+}
+async function loadMedia(){
+  document.getElementById('mediaGallery').innerHTML='<div class="muted">预览模式无媒体</div>';
+}
+
+applyHashRoute(); refreshAll();
+/* setInterval disabled in preview */
+</script></body></html>

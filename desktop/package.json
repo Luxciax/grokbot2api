@@ -1,7 +1,7 @@
 {
   "name": "grokbot2api-desktop",
   "private": true,
-  "version": "0.3.11",
+  "version": "0.3.12",
   "type": "module",
   "scripts": {
     "dev": "vite",
