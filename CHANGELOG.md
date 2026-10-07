@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.11
+
+### Desktop
+- 外观：设置里可选跟随系统 / 暗色 / 亮色；亮色为 Linear 风格浅灰白，非霓虹反色
+- 开机自启动：保存设置时同步 Windows 登录启动（`tauri-plugin-autostart`）
+- 行为偏好：关闭窗口最小化到托盘、启动时自动拉起网关、启动时最小化到托盘、续期凭证提醒开关
+- 旧版 `settings.json` 缺少新字段时按默认值加载，无需手工迁移
+
 ## 0.3.10
 
 - Desktop shell UI refresh: quieter dark theme, single sidebar with「配置」group, no top status bar.

@@ -6,6 +6,7 @@ import type {
   GatewayStatus,
   ImportResult,
   NavId,
+  ThemeMode,
 } from "./types";
 import { APP_VERSION, NAV_ITEMS } from "./types";
 import "./App.css";
@@ -28,6 +29,55 @@ function formatErr(err: unknown): string {
   return String(err);
 }
 
+function resolveTheme(theme: string): "dark" | "light" {
+  if (theme === "light" || theme === "dark") return theme;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function applyThemeAttr(theme: string) {
+  const resolved = resolveTheme(theme);
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.colorScheme = resolved;
+}
+
+function Toggle({
+  on,
+  onChange,
+  label,
+  hint,
+  id,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  hint: string;
+  id: string;
+}) {
+  return (
+    <div className="toggle-row">
+      <div className="toggle-copy">
+        <div className="toggle-label" id={`${id}-label`}>
+          {label}
+        </div>
+        <div className="toggle-hint">{hint}</div>
+      </div>
+      <button
+        type="button"
+        id={id}
+        className={`toggle ${on ? "on" : ""}`}
+        role="switch"
+        aria-checked={on}
+        aria-labelledby={`${id}-label`}
+        onClick={() => onChange(!on)}
+      >
+        <span className="toggle-knob" />
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [nav, setNav] = useState<NavId>("workbench");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -48,6 +98,8 @@ export default function App() {
   const hostInputRef = useRef<HTMLInputElement>(null);
   const prevAdminBase = useRef<string | null>(null);
   const lastGatewayErr = useRef<string | null>(null);
+  const settingsOpenRef = useRef(settingsOpen);
+  settingsOpenRef.current = settingsOpen;
 
   const refresh = useCallback(async () => {
     try {
@@ -58,7 +110,8 @@ export default function App() {
       ]);
       setStatus(g);
       setCreds(c);
-      setSettings(s);
+      // Keep in-drawer draft (theme preview, toggles) until Save/Cancel
+      setSettings((prev) => (settingsOpenRef.current && prev ? prev : s));
       // Surface new gateway last_error once via toast (no sticky banner stack).
       if (g.last_error && g.last_error !== lastGatewayErr.current) {
         lastGatewayErr.current = g.last_error;
@@ -85,6 +138,17 @@ export default function App() {
     const id = window.setInterval(() => void refresh(), 3000);
     return () => window.clearInterval(id);
   }, [refresh]);
+
+  // Apply theme (and follow system when theme=system)
+  useEffect(() => {
+    const theme = settings?.theme ?? "system";
+    applyThemeAttr(theme);
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyThemeAttr("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [settings?.theme]);
 
   // Success toast auto-clear ~3s
   useEffect(() => {
@@ -232,6 +296,15 @@ export default function App() {
     // Do NOT bump iframeKey — hash-only src change keeps iframe state
   }
 
+  function patchSettings(patch: Partial<AppSettings>) {
+    setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  function setThemePreview(theme: ThemeMode) {
+    patchSettings({ theme });
+    applyThemeAttr(theme);
+  }
+
   const gwHostPort =
     status != null
       ? `${status.host}:${status.port}`
@@ -249,6 +322,7 @@ export default function App() {
     !!creds &&
     !creds.has_renewal &&
     !renewalNoticeDismissed &&
+    settings?.show_renewal_nudge !== false &&
     (nav === "overview" || nav === "setup");
 
   const toastText = error || message || null;
@@ -256,6 +330,7 @@ export default function App() {
 
   const mainNav = NAV_ITEMS.filter((n) => n.id !== "setup");
   const setupNav = NAV_ITEMS.find((n) => n.id === "setup");
+  const theme = (settings?.theme ?? "system") as ThemeMode;
 
   return (
     <div className="app-shell">
@@ -727,47 +802,113 @@ export default function App() {
         <div className="drawer-body">
           {settings && (
             <>
-              <div className="field">
-                <label htmlFor="setHost">监听地址</label>
-                <input
-                  id="setHost"
-                  ref={hostInputRef}
-                  type="text"
-                  value={settings.host}
-                  onChange={(e) =>
-                    setSettings({ ...settings, host: e.target.value })
+              <div className="settings-section">
+                <div className="settings-section-title">网关</div>
+                <div className="field">
+                  <label htmlFor="setHost">监听地址</label>
+                  <input
+                    id="setHost"
+                    ref={hostInputRef}
+                    type="text"
+                    value={settings.host}
+                    onChange={(e) =>
+                      patchSettings({ host: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="setPort">端口</label>
+                  <input
+                    id="setPort"
+                    type="number"
+                    value={settings.port}
+                    onChange={(e) =>
+                      patchSettings({
+                        port: Number(e.target.value) || 18765,
+                      })
+                    }
+                  />
+                  <div className="field-hint">改端口需重启网关</div>
+                </div>
+                <div className="field">
+                  <label htmlFor="setMachine">机号（SAND_MACHINE_ID）</label>
+                  <input
+                    id="setMachine"
+                    type="text"
+                    className="mono"
+                    value={settings.machine_id}
+                    placeholder="可从 Grok Bot 导入"
+                    onChange={(e) =>
+                      patchSettings({ machine_id: e.target.value })
+                    }
+                  />
+                  <div className="field-hint">可选，用于多机区分</div>
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-title">外观</div>
+                <div className="seg" role="group" aria-label="主题">
+                  {(
+                    [
+                      ["system", "跟随系统"],
+                      ["dark", "暗色"],
+                      ["light", "亮色"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`seg-btn ${theme === value ? "active" : ""}`}
+                      onClick={() => setThemePreview(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-title">行为</div>
+                <Toggle
+                  id="tog-autostart"
+                  on={!!settings.autostart}
+                  onChange={(v) => patchSettings({ autostart: v })}
+                  label="开机自启动"
+                  hint="登录 Windows 后自动打开本应用"
+                />
+                <Toggle
+                  id="tog-close-tray"
+                  on={settings.close_to_tray !== false}
+                  onChange={(v) => patchSettings({ close_to_tray: v })}
+                  label="关闭窗口时最小化到托盘"
+                  hint="关闭主窗口不退出；托盘菜单可完全退出"
+                />
+                <Toggle
+                  id="tog-gw-launch"
+                  on={!!settings.start_gateway_on_launch}
+                  onChange={(v) =>
+                    patchSettings({ start_gateway_on_launch: v })
                   }
+                  label="启动应用时自动启动网关"
+                  hint="打开桌面端后立刻拉起本地代理"
+                />
+                <Toggle
+                  id="tog-start-min"
+                  on={!!settings.start_minimized}
+                  onChange={(v) => patchSettings({ start_minimized: v })}
+                  label="启动时最小化到托盘"
+                  hint="仅显示托盘图标，适合配合开机自启动"
+                />
+                <Toggle
+                  id="tog-nudge"
+                  on={settings.show_renewal_nudge !== false}
+                  onChange={(v) => patchSettings({ show_renewal_nudge: v })}
+                  label="显示续期凭证提醒"
+                  hint="缺少 sbi_ 时在总览/凭证页显示提示"
                 />
               </div>
-              <div className="field">
-                <label htmlFor="setPort">端口</label>
-                <input
-                  id="setPort"
-                  type="number"
-                  value={settings.port}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      port: Number(e.target.value) || 18765,
-                    })
-                  }
-                />
-                <div className="field-hint">改端口需重启网关</div>
-              </div>
-              <div className="field">
-                <label htmlFor="setMachine">机号（SAND_MACHINE_ID）</label>
-                <input
-                  id="setMachine"
-                  type="text"
-                  className="mono"
-                  value={settings.machine_id}
-                  placeholder="可从 Grok Bot 导入"
-                  onChange={(e) =>
-                    setSettings({ ...settings, machine_id: e.target.value })
-                  }
-                />
-                <div className="field-hint">可选，用于多机区分</div>
-              </div>
+
               <div className="drawer-danger">
                 <button
                   type="button"

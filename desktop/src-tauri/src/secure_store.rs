@@ -20,25 +20,96 @@ pub enum StoreError {
     Msg(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn default_host() -> String {
+    "127.0.0.1".into()
+}
+
+fn default_port() -> u16 {
+    18765
+}
+
+fn default_theme() -> String {
+    "system".into()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Normalize theme string to system|dark|light.
+pub fn normalize_theme(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "dark" => "dark".into(),
+        "light" => "light".into(),
+        _ => "system".into(),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    #[serde(default = "default_host")]
     pub host: String,
+    #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default)]
     pub machine_id: String,
+    #[serde(default)]
     pub onboarding_done: bool,
     /// Last known profile email from import (non-secret).
+    #[serde(default)]
     pub profile_email: String,
+    /// "system" | "dark" | "light"
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// Launch with OS login (Windows Run key via tauri-plugin-autostart).
+    #[serde(default)]
+    pub autostart: bool,
+    /// Close window → tray (default true).
+    #[serde(default = "default_true")]
+    pub close_to_tray: bool,
+    /// Start gateway when the desktop app launches.
+    #[serde(default)]
+    pub start_gateway_on_launch: bool,
+    /// Hide main window on launch (tray only).
+    #[serde(default)]
+    pub start_minimized: bool,
+    /// Show missing-sbi_ nudge on overview/setup.
+    #[serde(default = "default_true")]
+    pub show_renewal_nudge: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self::default_settings()
+    }
 }
 
 impl AppSettings {
     pub fn default_settings() -> Self {
         Self {
-            host: "127.0.0.1".into(),
-            port: 18765,
+            host: default_host(),
+            port: default_port(),
             machine_id: String::new(),
             onboarding_done: false,
             profile_email: String::new(),
+            theme: default_theme(),
+            autostart: false,
+            close_to_tray: true,
+            start_gateway_on_launch: false,
+            start_minimized: false,
+            show_renewal_nudge: true,
         }
+    }
+
+    /// Clamp theme and empty host/port before persist.
+    pub fn sanitize_mut(&mut self) {
+        if self.host.trim().is_empty() {
+            self.host = default_host();
+        }
+        if self.port == 0 {
+            self.port = default_port();
+        }
+        self.theme = normalize_theme(&self.theme);
     }
 }
 
@@ -67,14 +138,21 @@ pub fn load_settings() -> AppSettings {
         return AppSettings::default_settings();
     };
     match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).unwrap_or_else(|_| AppSettings::default_settings()),
+        Ok(text) => {
+            let mut s: AppSettings =
+                serde_json::from_str(&text).unwrap_or_else(|_| AppSettings::default_settings());
+            s.sanitize_mut();
+            s
+        }
         Err(_) => AppSettings::default_settings(),
     }
 }
 
 pub fn save_settings(settings: &AppSettings) -> Result<(), StoreError> {
+    let mut s = settings.clone();
+    s.sanitize_mut();
     let path = settings_path()?;
-    let text = serde_json::to_string_pretty(settings).map_err(|e| StoreError::Msg(e.to_string()))?;
+    let text = serde_json::to_string_pretty(&s).map_err(|e| StoreError::Msg(e.to_string()))?;
     std::fs::write(path, text).map_err(|e| StoreError::Msg(e.to_string()))
 }
 

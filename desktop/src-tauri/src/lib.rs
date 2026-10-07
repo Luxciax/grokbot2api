@@ -15,6 +15,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, State, WindowEvent,
 };
+use tauri_plugin_autostart::ManagerExt;
 
 struct AppState {
     gateway: Arc<GatewayManager>,
@@ -59,19 +60,31 @@ fn get_settings() -> AppSettings {
     secure_store::load_settings()
 }
 
+/// Sync OS login autostart with the saved preference.
+fn apply_autostart(app: &AppHandle, want: bool) -> Result<(), String> {
+    let mgr = app.autolaunch();
+    let enabled = mgr.is_enabled().unwrap_or(false);
+    if want && !enabled {
+        mgr.enable().map_err(|e| e.to_string())?;
+    } else if !want && enabled {
+        mgr.disable().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
-fn save_settings(mut settings: AppSettings) -> Result<AppSettings, String> {
-    if settings.host.trim().is_empty() {
-        settings.host = "127.0.0.1".into();
-    }
-    if settings.port == 0 {
-        settings.port = 8765;
-    }
+fn save_settings(app: AppHandle, mut settings: AppSettings) -> Result<AppSettings, String> {
+    settings.sanitize_mut();
     // Persist machine id into secret store when provided
     if !settings.machine_id.trim().is_empty() {
         secure_store::set_machine_id_secret(&settings.machine_id).map_err(|e| e.to_string())?;
     }
     secure_store::save_settings(&settings).map_err(|e| e.to_string())?;
+    // Apply login autostart after persist so settings.json wins even if registry fails.
+    if let Err(e) = apply_autostart(&app, settings.autostart) {
+        // Still return saved settings; surface registry error to UI.
+        return Err(format!("设置已保存，但开机自启动同步失败：{e}"));
+    }
     Ok(secure_store::load_settings())
 }
 
@@ -178,6 +191,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None::<Vec<&'static str>>,
+        ))
         .manage(AppState {
             gateway: gateway.clone(),
         })
@@ -196,13 +213,40 @@ pub fn run() {
         ])
         .setup(|app| {
             setup_tray(app.handle())?;
+
+            let settings = secure_store::load_settings();
+
+            // Keep OS autostart in sync with saved preference (covers first run / manual registry edits).
+            let _ = apply_autostart(app.handle(), settings.autostart);
+
+            if settings.start_minimized {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+            }
+
+            if settings.start_gateway_on_launch {
+                let resource_dir = app.path().resource_dir().ok();
+                let gw = app.state::<AppState>().gateway.clone();
+                let _ = gw.start(resource_dir);
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Close to tray instead of quitting
-                api.prevent_close();
-                let _ = window.hide();
+                let settings = secure_store::load_settings();
+                if settings.close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    // Quit for real: stop gateway, then exit (tray would otherwise keep process alive).
+                    api.prevent_close();
+                    let app = window.app_handle().clone();
+                    let state = app.state::<AppState>();
+                    let _ = state.gateway.stop();
+                    app.exit(0);
+                }
             }
         })
         .build(tauri::generate_context!())

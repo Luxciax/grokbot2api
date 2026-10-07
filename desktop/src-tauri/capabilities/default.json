@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口能力：网关控制、凭证导入、设置、托盘",
+  "description": "主窗口能力：网关控制、凭证导入、设置、托盘、开机自启动",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,6 +10,9 @@
     "core:tray:default",
     "core:app:default",
     "opener:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
     "allow-import-grok-bot-credentials",
     "allow-start-gateway",
     "allow-stop-gateway",

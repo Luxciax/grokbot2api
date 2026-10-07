@@ -11,12 +11,27 @@ export interface GatewayStatus {
   launch_mode: string | null;
 }
 
+/** Shell appearance preference. */
+export type ThemeMode = "system" | "dark" | "light";
+
 export interface AppSettings {
   host: string;
   port: number;
   machine_id: string;
   onboarding_done: boolean;
   profile_email: string;
+  /** "system" | "dark" | "light" */
+  theme: ThemeMode;
+  /** Launch app with Windows login */
+  autostart: boolean;
+  /** Close window → tray instead of quit */
+  close_to_tray: boolean;
+  /** Start gateway when the desktop app launches */
+  start_gateway_on_launch: boolean;
+  /** Hide main window on launch (tray only) */
+  start_minimized: boolean;
+  /** Show missing-sbi_ nudge on overview/setup */
+  show_renewal_nudge: boolean;
 }
 
 export interface CredentialStatus {
@@ -62,4 +77,4 @@ export const NAV_ITEMS: { id: NavId; label: string; hash?: string }[] = [
   { id: "setup", label: "凭证" },
 ];
 
-export const APP_VERSION = "0.3.10";
+export const APP_VERSION = "0.3.11";
