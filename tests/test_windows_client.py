@@ -126,10 +126,10 @@ class DesktopNavAndImportSourceTests(unittest.TestCase):
         app = (ROOT / "desktop" / "src" / "App.tsx").read_text(encoding="utf-8")
         self.assertNotIn("disabled={busy || running || !creds?.has_renewal}", app)
         self.assertNotIn("disabled={busy || !creds?.has_renewal}", app)
-        self.assertIn("emptyTitle", app)
-        self.assertIn("emptyBody", app)
+        self.assertIn("empty-title", app)
+        self.assertIn("empty-desc", app)
         types = (ROOT / "desktop" / "src" / "types.ts").read_text(encoding="utf-8")
-        self.assertIn('APP_VERSION = "0.3.9"', types)
+        self.assertIn('APP_VERSION = "0.3.13"', types)
 
     def test_gateway_start_allows_missing_renewal(self) -> None:
         src = (ROOT / "desktop" / "src-tauri" / "src" / "gateway.rs").read_text(
