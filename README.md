@@ -14,7 +14,7 @@ It translates Grok Build requests into Cursor's undocumented `aiserver.v1.Infere
 - Native Cursor protobuf tool calls and tool results
 - Vision / image input forwarding (`image_url`, `input_image`, Anthropic image blocks, data URLs, http(s) URLs)
 - Image generation via `AiService/RunGenerateImage` (`POST /v1/images/generations`, catalogue `cursor-generate-image`)
-- Multi-model catalogue for the Cursor Models pool (Grok 4.6 / 4.5, Composer 2.5, Fast variants)
+- Multi-model catalogue for the Cursor Models pool (Grok 4.7 / 4.6 / 4.5, Composer 2.5, Claude Opus 5.5, Fast variants)
 - Multi-turn Grok Build agent loops
 - Streaming SSE responses with heartbeats
 - `GET /v1/models`, `GET /v1/usage`, richer `GET /health`, and `GET /docs`
@@ -130,6 +130,9 @@ Keep custom `model` values distinct from built-in IDs such as `grok-4.7`. Otherw
 | `cursor-grok-4-5-fast` | `grok-4.5` | `effort=high`, `fast=true` |
 | `cursor-composer-2-5` | `composer-2.5` | `fast=false` |
 | `cursor-composer-2-5-fast` | `composer-2.5` | `fast=true` |
+| `cursor-claude-opus-5-5` | `claude-opus-5-5-high` | packed high |
+| `cursor-claude-opus-5-5-fast` | `claude-opus-5-5-high-fast` | packed high-fast |
+| `opus-5.5` / `claude-opus-5-5` | `claude-opus-5-5-high` | short aliases |
 | `cursor-generate-image` | `cursor-generate-image` | AiService/RunGenerateImage (session token) |
 
 Bare upstream ids (`grok-4.7`, `grok-4.6`, `grok-4.5`, `composer-2.5`) are also accepted. When the client omits `model`, the process `--model` value is used as the upstream id (default `grok-4.7`).

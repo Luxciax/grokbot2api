@@ -129,7 +129,7 @@ class DesktopNavAndImportSourceTests(unittest.TestCase):
         self.assertIn("emptyTitle", app)
         self.assertIn("emptyBody", app)
         types = (ROOT / "desktop" / "src" / "types.ts").read_text(encoding="utf-8")
-        self.assertIn('APP_VERSION = "0.3.7"', types)
+        self.assertIn('APP_VERSION = "0.3.9"', types)
 
     def test_gateway_start_allows_missing_renewal(self) -> None:
         src = (ROOT / "desktop" / "src-tauri" / "src" / "gateway.rs").read_text(

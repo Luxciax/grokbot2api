@@ -131,6 +131,69 @@ BUILTIN_MODELS: list[ModelSpec] = [
         notes="Composer 2.5 fast (product default)",
         supports_vision=False,
     ),
+
+    # 2026-10-07: GetUsableModels lists packed Claude Opus 5.5 variant strings.
+    # Agent chat may still auto-pick; Stream needs sbi_ + account permissions.
+    _packed(
+        "cursor-claude-opus-5-5",
+        "claude-opus-5-5-high",
+        display_name="Cursor Claude Opus 5.5",
+        notes="Upstream packed id claude-opus-5-5-high (GetUsableModels)",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-fast",
+        "claude-opus-5-5-high-fast",
+        display_name="Cursor Claude Opus 5.5 Fast",
+        notes="Upstream packed id claude-opus-5-5-high-fast",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-medium",
+        "claude-opus-5-5-medium",
+        display_name="Cursor Claude Opus 5.5 Medium",
+        notes="Upstream packed id claude-opus-5-5-medium",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-medium-fast",
+        "claude-opus-5-5-medium-fast",
+        display_name="Cursor Claude Opus 5.5 Medium Fast",
+        notes="Upstream packed id claude-opus-5-5-medium-fast",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-low",
+        "claude-opus-5-5-low",
+        display_name="Cursor Claude Opus 5.5 Low",
+        notes="Upstream packed id claude-opus-5-5-low",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-low-fast",
+        "claude-opus-5-5-low-fast",
+        display_name="Cursor Claude Opus 5.5 Low Fast",
+        notes="Upstream packed id claude-opus-5-5-low-fast",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-max",
+        "claude-opus-5-5-max",
+        display_name="Cursor Claude Opus 5.5 Max",
+        notes="Upstream packed id claude-opus-5-5-max",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-max-fast",
+        "claude-opus-5-5-max-fast",
+        display_name="Cursor Claude Opus 5.5 Max Fast",
+        notes="Upstream packed id claude-opus-5-5-max-fast",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-xhigh",
+        "claude-opus-5-5-xhigh",
+        display_name="Cursor Claude Opus 5.5 Extra High",
+        notes="Upstream packed id claude-opus-5-5-xhigh",
+    ),
+    _packed(
+        "cursor-claude-opus-5-5-xhigh-fast",
+        "claude-opus-5-5-xhigh-fast",
+        display_name="Cursor Claude Opus 5.5 Extra High Fast",
+        notes="Upstream packed id claude-opus-5-5-xhigh-fast",
+    ),
     ModelSpec(
         alias="cursor-generate-image",
         upstream_id="cursor-generate-image",
@@ -177,6 +240,63 @@ UPSTREAM_PASSTHROUGH: dict[str, ModelSpec] = {
         "cursor-grok-4.6-high-fast",
         display_name="Cursor Grok 4.6 High Fast",
     ),
+    # Claude Opus 5.5 packed ids + short aliases (GetUsableModels 2026-10-07).
+    "claude-opus-5-5": _packed(
+        "claude-opus-5-5",
+        "claude-opus-5-5-high",
+        display_name="Claude Opus 5.5 (->high)",
+    ),
+    "opus-5.5": _packed(
+        "opus-5.5",
+        "claude-opus-5-5-high",
+        display_name="Opus 5.5 (->claude-opus-5-5-high)",
+    ),
+    "opus-5-5": _packed(
+        "opus-5-5",
+        "claude-opus-5-5-high",
+        display_name="Opus 5-5 (->claude-opus-5-5-high)",
+    ),
+    "claude-opus-5-5-high": _packed(
+        "claude-opus-5-5-high", "claude-opus-5-5-high", display_name="Claude Opus 5.5 High"
+    ),
+    "claude-opus-5-5-high-fast": _packed(
+        "claude-opus-5-5-high-fast",
+        "claude-opus-5-5-high-fast",
+        display_name="Claude Opus 5.5 High Fast",
+    ),
+    "claude-opus-5-5-medium": _packed(
+        "claude-opus-5-5-medium", "claude-opus-5-5-medium", display_name="Claude Opus 5.5 Medium"
+    ),
+    "claude-opus-5-5-medium-fast": _packed(
+        "claude-opus-5-5-medium-fast",
+        "claude-opus-5-5-medium-fast",
+        display_name="Claude Opus 5.5 Medium Fast",
+    ),
+    "claude-opus-5-5-low": _packed(
+        "claude-opus-5-5-low", "claude-opus-5-5-low", display_name="Claude Opus 5.5 Low"
+    ),
+    "claude-opus-5-5-low-fast": _packed(
+        "claude-opus-5-5-low-fast",
+        "claude-opus-5-5-low-fast",
+        display_name="Claude Opus 5.5 Low Fast",
+    ),
+    "claude-opus-5-5-max": _packed(
+        "claude-opus-5-5-max", "claude-opus-5-5-max", display_name="Claude Opus 5.5 Max"
+    ),
+    "claude-opus-5-5-max-fast": _packed(
+        "claude-opus-5-5-max-fast",
+        "claude-opus-5-5-max-fast",
+        display_name="Claude Opus 5.5 Max Fast",
+    ),
+    "claude-opus-5-5-xhigh": _packed(
+        "claude-opus-5-5-xhigh", "claude-opus-5-5-xhigh", display_name="Claude Opus 5.5 Extra High"
+    ),
+    "claude-opus-5-5-xhigh-fast": _packed(
+        "claude-opus-5-5-xhigh-fast",
+        "claude-opus-5-5-xhigh-fast",
+        display_name="Claude Opus 5.5 Extra High Fast",
+    ),
+
 }
 
 

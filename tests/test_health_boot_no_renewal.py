@@ -73,7 +73,7 @@ class HealthFingerprintUnitTests(unittest.TestCase):
     def test_version_bumped(self):
         import grokbot2api as bridge
 
-        self.assertEqual(bridge.__version__, "0.3.7")
+        self.assertEqual(bridge.__version__, "0.3.9")
 
 
 if __name__ == "__main__":
@@ -121,4 +121,5 @@ class ApiErrorPayloadTests(unittest.TestCase):
         self.assertIn("sbi_/JWT", msg)  # explicitly not an expiry blame
         msg2 = bridge.coerce_error_message(str(raw))
         self.assertIn("ERROR_NOT_HIGH_ENOUGH_PERMISSIONS", msg2)
-        self.assertIn("SendGrokBotUserMessage", msg2)
+        self.assertIn("chat_mode=agent", msg2)
+        self.assertIn("tools", msg2)

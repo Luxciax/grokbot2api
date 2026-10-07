@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.9
+
+- Add: Claude Opus 5.5 catalogue family from `AiService/GetUsableModels` packed ids (`claude-opus-5-5-high` / `-high-fast` / `-medium` / `-low` / `-max` / `-xhigh` and fast variants).
+- Add curated aliases: `cursor-claude-opus-5-5` (+ effort/fast variants), plus short `claude-opus-5-5`, `opus-5.5`, `opus-5-5` (default map to high).
+- Note: listing an id does not guarantee inference. Agent mode (`GrokBotService`) may still auto-pick the sand model; Stream (`InferenceService/Stream`) needs a valid `sbi_`/session credentials and account permissions.
+- Keep existing Grok / Composer / image catalogue entries unchanged.
+
 ## 0.3.8
 
 - Fix: in `chat_mode=agent` (default), ignore client `tools` and stay on GrokBotService instead of falling through to `InferenceService/Stream` (Hermes and similar clients attach builtin tools → previous 502 `ERROR_NOT_HIGH_ENOUGH_PERMISSIONS`).

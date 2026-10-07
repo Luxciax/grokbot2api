@@ -76,6 +76,9 @@ class ModelCatalogueTests(unittest.TestCase):
             "cursor-grok-4-5-fast",
             "cursor-composer-2-5",
             "cursor-composer-2-5-fast",
+            "cursor-claude-opus-5-5",
+            "cursor-claude-opus-5-5-fast",
+            "cursor-claude-opus-5-5-max",
         }:
             self.assertIn(needed, aliases)
 
@@ -102,6 +105,17 @@ class ModelCatalogueTests(unittest.TestCase):
         bare = catalogue.resolve("grok-4.7")
         self.assertEqual(bare.upstream_id, "grok-4.7-high")
         self.assertEqual(catalogue.default_alias, "cursor-grok-4-7")
+
+    def test_resolve_opus_5_5_aliases(self):
+        catalogue = model_catalogue.ModelCatalogue(
+            config_path=Path(self.id() + ".json")
+        )
+        high = catalogue.resolve("cursor-claude-opus-5-5")
+        self.assertEqual(high.upstream_id, "claude-opus-5-5-high")
+        self.assertEqual(catalogue.resolve("opus-5.5").upstream_id, "claude-opus-5-5-high")
+        self.assertEqual(catalogue.resolve("claude-opus-5-5").upstream_id, "claude-opus-5-5-high")
+        fast = catalogue.resolve("cursor-claude-opus-5-5-fast")
+        self.assertEqual(fast.upstream_id, "claude-opus-5-5-high-fast")
 
     def test_resolve_composer(self):
         catalogue = model_catalogue.ModelCatalogue(
@@ -207,7 +221,10 @@ class ModelsAndAdminHttpTests(unittest.TestCase):
             "cursor-grok-4-5-fast",
             "cursor-composer-2-5",
             "cursor-composer-2-5-fast",
+            "cursor-claude-opus-5-5",
+            "cursor-claude-opus-5-5-fast",
             "grok-4.7",
+            "opus-5.5",
         }:
             self.assertIn(needed, ids)
 
